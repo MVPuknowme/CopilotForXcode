@@ -116,6 +116,11 @@ public struct UserDefaultPreferenceKeys {
         defaultValue: false,
         key: "ExtensionPermissionShown"
     )
+    
+    public let capturePermissionShown = PreferenceKey(
+        defaultValue: false,
+        key: "CapturePermissionShown"
+    )
 }
 
 // MARK: - Prompt to Code
@@ -160,6 +165,10 @@ public extension UserDefaultPreferenceKeys {
 
     var realtimeSuggestionToggle: PreferenceKey<Bool> {
         .init(defaultValue: true, key: "RealtimeSuggestionToggle")
+    }
+    
+    var realtimeNESToggle: PreferenceKey<Bool> {
+        .init(defaultValue: true, key: "RealtimeNESToggle")
     }
 
     var suggestionDisplayCompactMode: PreferenceKey<Bool> {
@@ -238,6 +247,10 @@ public extension UserDefaultPreferenceKeys {
 // MARK: - Chat
 
 public extension UserDefaultPreferenceKeys {
+    
+    var fontScale: PreferenceKey<Double> {
+        .init(defaultValue: 1.0, key: "FontScale")
+    }
 
     var chatFontSize: PreferenceKey<Double> {
         .init(defaultValue: 13, key: "ChatFontSize")
@@ -290,6 +303,46 @@ public extension UserDefaultPreferenceKeys {
     
     var keepFloatOnTopIfChatPanelAndXcodeOverlaps: PreferenceKey<Bool> {
         .init(defaultValue: true, key: "KeepFloatOnTopIfChatPanelAndXcodeOverlaps")
+    }
+
+    var enableCurrentEditorContext: PreferenceKey<Bool> {
+        .init(defaultValue: true, key: "EnableCurrentEditorContext")
+    }
+    
+    var chatResponseLocale: PreferenceKey<String> {
+        .init(defaultValue: "en", key: "ChatResponseLocale")
+    }
+    
+    var agentMaxToolCallingLoop: PreferenceKey<Int> {
+        .init(defaultValue: 25, key: "AgentMaxToolCallingLoop")
+    }
+
+    var globalCopilotInstructions: PreferenceKey<String> {
+        .init(defaultValue: "", key: "GlobalCopilotInstructions")
+    }
+    
+    var autoAttachChatToXcode: PreferenceKey<Bool> {
+        .init(defaultValue: true, key: "AutoAttachChatToXcode")
+    }
+    
+    var enableFixError: PreferenceKey<Bool> {
+        .init(defaultValue: true, key: "EnableFixError")
+    }
+    
+    var suppressRestoreCheckpointConfirmation: PreferenceKey<Bool> {
+        .init(defaultValue: false, key: "SuppressRestoreCheckpointConfirmation")
+    }
+    
+    var enableSubagent: PreferenceKey<Bool> {
+        .init(defaultValue: true, key: "EnableSubagent")
+    }
+
+    var enableAutoApproval: PreferenceKey<Bool> {
+        .init(defaultValue: false, key: "EnableAutoApproval")
+    }
+
+    var trustToolAnnotations: PreferenceKey<Bool> {
+        .init(defaultValue: false, key: "TrustToolAnnotations")
     }
 }
 
@@ -550,6 +603,14 @@ public extension UserDefaultPreferenceKeys {
     var gitHubCopilotProxyPassword: PreferenceKey<String> {
         .init(defaultValue: "", key: "GitHubCopilotProxyPassword")
     }
+    
+    var gitHubCopilotMCPConfig: PreferenceKey<String> {
+        .init(defaultValue: "", key: "GitHubCopilotMCPConfig")
+    }
+    
+    var gitHubCopilotMCPUpdatedStatus: PreferenceKey<String> {
+        .init(defaultValue: "", key: "GitHubCopilotMCPUpdatedStatus")
+    }
 
     var gitHubCopilotEnterpriseURI: PreferenceKey<String> {
         .init(defaultValue: "", key: "GitHubCopilotEnterpriseURI")
@@ -557,5 +618,17 @@ public extension UserDefaultPreferenceKeys {
 
     var verboseLoggingEnabled: PreferenceKey<Bool> {
         .init(defaultValue: false, key: "VerboseLoggingEnabled")
+    }
+    
+    var currentUserName: PreferenceKey<String> {
+        .init(defaultValue: "", key: "CurrentUserName")
+    }
+    
+    var mcpRegistryBaseURL: PreferenceKey<String> {
+        .init(defaultValue: "https://api.mcp.github.com", key: "MCPRegistryBaseURL")
+    }
+    
+    var mcpRegistryBaseURLHistory: PreferenceKey<[String]> {
+        .init(defaultValue: [], key: "MCPRegistryBaseURLHistory")
     }
 }

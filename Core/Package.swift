@@ -53,8 +53,7 @@ let package = Package(
             .package(url: "https://github.com/devm33/KeyboardShortcuts", branch: "main"),
         .package(url: "https://github.com/devm33/CGEventOverride", branch: "devm33/fix-stale-AXIsProcessTrusted"),
         .package(url: "https://github.com/devm33/Highlightr", branch: "master"),
-        .package(url: "https://github.com/globulus/swiftui-flow-layout",
-                 from: "1.0.5")
+        .package(url: "https://github.com/globulus/swiftui-flow-layout", from: "1.0.5")
     ],
     targets: [
         // MARK: - Main
@@ -94,6 +93,7 @@ let package = Package(
                 .product(name: "ChatAPIService", package: "Tool"),
                 .product(name: "Preferences", package: "Tool"),
                 .product(name: "AXHelper", package: "Tool"),
+                .product(name: "WorkspaceSuggestionService", package: "Tool"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
@@ -131,6 +131,7 @@ let package = Package(
                     .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                     .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                     .product(name: "GitHubCopilotService", package: "Tool"),
+                    .product(name: "Persist", package: "Tool"),
                 ]),
         
         // MARK: - Suggestion Service
@@ -178,7 +179,18 @@ let package = Package(
                     .product(name: "AXHelper", package: "Tool"),
                     .product(name: "ConversationServiceProvider", package: "Tool"),
                     .product(name: "GitHubCopilotService", package: "Tool"),
+                    .product(name: "Workspace", package: "Tool"),
+                    .product(name: "Terminal", package: "Tool"),
+                    .product(name: "SystemUtils", package: "Tool"),
+                    .product(name: "AppKitExtension", package: "Tool"),
+                    .product(name: "WebContentExtractor", package: "Tool"),
+                    .product(name: "GitHelper", package: "Tool"),
+                    .product(name: "SuggestionBasic", package: "Tool")
                 ]),
+            .testTarget(
+                name: "ChatServiceTests",
+                dependencies: ["ChatService"]
+            ),
 
             .target(
                 name: "ConversationTab",
@@ -196,16 +208,13 @@ let package = Package(
                     .product(name: "Persist", package: "Tool")
                 ]
             ),
-            .testTarget(
-                name: "ConversationTabTests",
-                dependencies: ["ConversationTab"]
-            ),
         
         // MARK: - UI
         
             .target(
                 name: "SuggestionWidget",
                 dependencies: [
+                    "ChatService",
                     "PromptToCodeService",
                     "ConversationTab",
                     "GitHubCopilotViewModel",
@@ -218,6 +227,7 @@ let package = Package(
                     .product(name: "ChatTab", package: "Tool"),
                     .product(name: "Logger", package: "Tool"),
                     .product(name: "CustomAsyncAlgorithms", package: "Tool"),
+                    .product(name: "HostAppActivator", package: "Tool"),
                     .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
                     .product(name: "MarkdownUI", package: "swift-markdown-ui"),
                     .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
@@ -245,6 +255,7 @@ let package = Package(
         .target(
             name: "GitHubCopilotViewModel",
             dependencies: [
+                "Client",
                 .product(name: "GitHubCopilotService", package: "Tool"),
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Status", package: "Tool"),
@@ -256,6 +267,7 @@ let package = Package(
         .target(
             name: "KeyBindingManager",
             dependencies: [
+                "SuggestionWidget",
                 .product(name: "Workspace", package: "Tool"),
                 .product(name: "Preferences", package: "Tool"),
                 .product(name: "Logger", package: "Tool"),

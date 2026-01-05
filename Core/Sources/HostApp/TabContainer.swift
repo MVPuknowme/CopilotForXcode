@@ -5,24 +5,36 @@ import LaunchAgentManager
 import SwiftUI
 import Toast
 import UpdateChecker
+import Client
+import Logger
+import Combine
 
 @MainActor
-let hostAppStore: StoreOf<HostApp> = .init(initialState: .init(), reducer: { HostApp() })
+public let hostAppStore: StoreOf<HostApp> = .init(initialState: .init(), reducer: { HostApp() })
 
 public struct TabContainer: View {
     let store: StoreOf<HostApp>
     @ObservedObject var toastController: ToastController
+    @ObservedObject private var featureFlags = FeatureFlagManager.shared
     @State private var tabBarItems = [TabBarItem]()
-    @State var tag: Int = 0
+    @Binding var tag: TabIndex
 
     public init() {
         toastController = ToastControllerDependencyKey.liveValue
         store = hostAppStore
+        _tag = Binding(
+            get: { hostAppStore.state.activeTabIndex },
+            set: { hostAppStore.send(.setActiveTab($0)) }
+        )
     }
 
     init(store: StoreOf<HostApp>, toastController: ToastController) {
         self.store = store
         self.toastController = toastController
+        _tag = Binding(
+            get: { store.state.activeTabIndex },
+            set: { store.send(.setActiveTab($0)) }
+        )
     }
 
     public var body: some View {
@@ -31,26 +43,21 @@ public struct TabContainer: View {
                 TabBar(tag: $tag, tabBarItems: tabBarItems)
                     .padding(.bottom, 8)
                 ZStack(alignment: .center) {
-                    GeneralView(store: store.scope(state: \.general, action: \.general))
-                        .tabBarItem(
-                            tag: 0,
-                            title: "General",
-                            image: "CopilotLogo",
-                            isSystemImage: false
-                        )
-                    AdvancedSettings().tabBarItem(
-                        tag: 2,
-                        title: "Advanced",
-                        image: "gearshape.2.fill"
-                    )
+                    GeneralView(store: store.scope(state: \.general, action: \.general)).tabBarItem(for: .general)
+                    AdvancedSettings().tabBarItem(for: .advanced)
+                    if featureFlags.isAgentModeEnabled {
+                        MCPConfigView().tabBarItem(for: .tools)
+                    }
+                    if featureFlags.isBYOKEnabled {
+                        BYOKConfigView().tabBarItem(for: .byok)
+                    }
                 }
                 .environment(\.tabBarTabTag, tag)
                 .frame(minHeight: 400)
             }
             .focusable(false)
             .padding(.top, 8)
-            .background(.ultraThinMaterial.opacity(0.01))
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+            .background(Color(nsColor: .controlBackgroundColor))
             .handleToast()
             .onPreferenceChange(TabBarItemPreferenceKey.self) { items in
                 tabBarItems = items
@@ -58,12 +65,22 @@ public struct TabContainer: View {
             .onAppear {
                 store.send(.appear)
             }
+            .onChange(of: featureFlags.isAgentModeEnabled) { isEnabled in
+                if hostAppStore.state.activeTabIndex == .tools && !isEnabled {
+                    hostAppStore.send(.setActiveTab(.general))
+                }
+            }
+            .onChange(of: featureFlags.isBYOKEnabled) { isEnabled in
+                if hostAppStore.state.activeTabIndex == .byok && !isEnabled {
+                    hostAppStore.send(.setActiveTab(.general))
+                }
+            }
         }
     }
 }
 
 struct TabBar: View {
-    @Binding var tag: Int
+    @Binding var tag: TabIndex
     fileprivate var tabBarItems: [TabBarItem]
 
     var body: some View {
@@ -82,9 +99,9 @@ struct TabBar: View {
 }
 
 struct TabBarButton: View {
-    @Binding var currentTag: Int
+    @Binding var currentTag: TabIndex
     @State var isHovered = false
-    var tag: Int
+    var tag: TabIndex
     var title: String
     var image: String
     var isSystemImage: Bool = true
@@ -115,7 +132,7 @@ struct TabBarButton: View {
             .padding(.vertical, 4)
             .padding(.top, 4)
             .background(
-                tag == currentTag
+                isSelected
                     ? Color(nsColor: .textColor).opacity(0.1)
                     : Color.clear,
                 in: RoundedRectangle(cornerRadius: 8)
@@ -136,7 +153,7 @@ struct TabBarButton: View {
 
 private struct TabBarTabViewWrapper<Content: View>: View {
     @Environment(\.tabBarTabTag) var tabBarTabTag
-    var tag: Int
+    var tag: TabIndex
     var title: String
     var image: String
     var isSystemImage: Bool = true
@@ -158,25 +175,20 @@ private struct TabBarTabViewWrapper<Content: View>: View {
 }
 
 private extension View {
-    func tabBarItem(
-        tag: Int,
-        title: String,
-        image: String,
-        isSystemImage: Bool = true
-    ) -> some View {
+    func tabBarItem(for tag: TabIndex) -> some View {
         TabBarTabViewWrapper(
             tag: tag,
-            title: title,
-            image: image,
-            isSystemImage: isSystemImage,
+            title: tag.title,
+            image: tag.image,
+            isSystemImage: tag.isSystemImage,
             content: { self }
         )
     }
 }
 
 private struct TabBarItem: Identifiable, Equatable {
-    var id: Int { tag }
-    var tag: Int
+    var id: TabIndex { tag }
+    var tag: TabIndex
     var title: String
     var image: String
     var isSystemImage: Bool = true
@@ -190,11 +202,11 @@ private struct TabBarItemPreferenceKey: PreferenceKey {
 }
 
 private struct TabBarTabTagKey: EnvironmentKey {
-    static var defaultValue: Int = 0
+    static var defaultValue: TabIndex = .general
 }
 
 private extension EnvironmentValues {
-    var tabBarTabTag: Int {
+    var tabBarTabTag: TabIndex {
         get { self[TabBarTabTagKey.self] }
         set { self[TabBarTabTagKey.self] = newValue }
     }
@@ -234,3 +246,26 @@ struct TabContainer_Toasts_Previews: PreviewProvider {
     }
 }
 
+@available(macOS 14.0, *)
+@MainActor
+public struct SettingsEnvironment: View {
+    @Environment(\.openSettings) public var openSettings: OpenSettingsAction
+    
+    public init() {}
+    
+    public var body: some View {
+        EmptyView().onAppear {
+            openSettings()
+        }
+    }
+    
+    public func open() {
+        let controller = NSHostingController(rootView: self)
+        let window = NSWindow(contentViewController: controller)
+        window.orderFront(nil)
+        // Close the temporary window after settings are opened
+        DispatchQueue.main.async {
+            window.close()
+        }
+    }
+}

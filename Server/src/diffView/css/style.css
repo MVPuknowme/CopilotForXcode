@@ -1,0 +1,192 @@
+/* Diff Viewer Styles */
+:root {
+    /* Light theme variables */
+    --bg-color: #ffffff;
+    --text-color: #333333;
+    --border-color: #dddddd;
+    --button-bg: #007acc;
+    --button-text: white;
+    --secondary-button-bg: #f0f0f0;
+    --secondary-button-text: #333333;
+    --secondary-button-border: #dddddd;
+    --secondary-button-hover: #e0e0e0;
+    --additions-foreground-color: #2EA043;
+    --deletions-foreground-color: #F85149;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* Dark theme variables */
+        --bg-color: #1e1e1e;
+        --text-color: #cccccc;
+        --border-color: #444444;
+        --button-bg: #0e639c;
+        --button-text: white;
+        --secondary-button-bg: #6E6D70;
+        --secondary-button-text: #DFDEDF;
+        --secondary-button-border: #555555;
+        --secondary-button-hover: #505050;
+        --additions-foreground-color: #2EA043;
+        --deletions-foreground-color: #F85149;
+    }
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+#container {
+    width: calc(100% - 40px); /* 20px padding on each side */
+    height: calc(100vh - 84px); /* 40px header + 4px top padding + 40px bottom padding */
+    border: 1px solid var(--border-color);
+    margin: 0 20px 40px 20px;
+    padding: 0;
+    margin-top: 44px; /* 40px header + 4px top padding */
+    box-sizing: border-box;
+}
+
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-color);
+}
+
+.header {
+    position: absolute;
+    top: 4px;
+    left: 10px;
+    right: 10px;
+    height: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+    background-color: var(--bg-color);
+    box-sizing: border-box;
+}
+
+.action-button {
+    margin-left: 2px;
+    padding: 4px 14px;
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.action-button:hover {
+    background-color: #0062a3;
+}
+
+.action-button.secondary {
+    background-color: var(--secondary-button-bg);
+    color: var(--secondary-button-text);
+    border: 1px solid var(--secondary-button-border);
+}
+
+.action-button.secondary:hover {
+    background-color: var(--secondary-button-hover);
+}
+
+.hidden {
+    display: none;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    gap: 4px;
+}
+
+/* file path */
+.file-path {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Diff stats */
+.diff-stats {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    gap: 4px;
+}
+
+.additions-count {
+    color: var(--additions-foreground-color);
+    font-weight: 600;
+}
+
+.deletions-count {
+    color: var(--deletions-foreground-color);
+    font-weight: 600;
+}
+
+/* Style for gutter indicators using data attributes */
+.monaco-editor .codicon.codicon-diff-insert:before {
+    content: "+" !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+    font-weight: bold;
+    color: var(--additions-foreground-color) !important;
+    padding: 0 2px;
+}
+
+.monaco-editor .codicon.codicon-diff-remove:before {
+    content: "-" !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+    font-weight: bold;
+    color: var(--deletions-foreground-color) !important;
+    padding: 0 2px;
+}
+
+/* Force show for Monaco Editor 0.52.2 */
+.monaco-editor .diff-side-insert .margin-view-zone .codicon,
+.monaco-editor .diff-side-delete .margin-view-zone .codicon {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Hide the diff overview bar completely */
+.monaco-diff-editor .diffOverview {
+    display: none !important;
+}
+
+/* Hide all lightbulb icons (Copy Changed Line buttons) */
+.monaco-editor .codicon-lightbulb,
+.monaco-editor .codicon-lightbulb-autofix,
+.monaco-editor .lightbulb-glyph {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* Unfold icon */
+.monaco-editor .codicon.codicon-unfold:before {
+    content:"···" !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+    font-weight: bold;
+}

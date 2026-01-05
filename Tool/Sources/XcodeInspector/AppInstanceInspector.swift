@@ -2,16 +2,12 @@ import AppKit
 import Foundation
 
 public class AppInstanceInspector: ObservableObject {
-    let runningApplication: NSRunningApplication
+    public let runningApplication: NSRunningApplication
     public let processIdentifier: pid_t
     public let bundleURL: URL?
     public let bundleIdentifier: String?
 
-    public var appElement: AXUIElement {
-        let app = AXUIElementCreateApplication(runningApplication.processIdentifier)
-        app.setMessagingTimeout(2)
-        return app
-    }
+    public var appElement: AXUIElement { .fromRunningApplication(runningApplication) }
 
     public var isTerminated: Bool {
         return runningApplication.isTerminated
@@ -26,6 +22,11 @@ public class AppInstanceInspector: ObservableObject {
         guard !runningApplication.isTerminated else { return false }
         return runningApplication.isXcode
     }
+    
+    public var isCopilotForXcodeExtensionService: Bool {
+        guard !runningApplication.isTerminated else { return false }
+        return runningApplication.isCopilotForXcodeExtensionService
+    }
 
     public var isExtensionService: Bool {
         guard !runningApplication.isTerminated else { return false }
@@ -35,8 +36,12 @@ public class AppInstanceInspector: ObservableObject {
     public func activate() -> Bool {
         return runningApplication.activate()
     }
+    
+    public func activate(options: NSApplication.ActivationOptions) -> Bool {
+        return runningApplication.activate(options: options)
+    }
 
-    init(runningApplication: NSRunningApplication) {
+    public init(runningApplication: NSRunningApplication) {
         self.runningApplication = runningApplication
         processIdentifier = runningApplication.processIdentifier
         bundleURL = runningApplication.bundleURL

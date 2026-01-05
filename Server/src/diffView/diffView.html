@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="color-scheme" content="light dark">
+    <title>Diff Viewer</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="loading" class="loading">Loading diff viewer...</div>
+    
+    <div class="header">
+        <div class="header-left">
+            <div id="file-path" class="file-path"></div>
+            <div id="diff-stats" class="diff-stats">
+                <span id="additions-count" class="additions-count">+0</span>
+                <span id="deletions-count" class="deletions-count">-0</span>
+            </div>
+        </div>
+
+        <div id="choice-buttons" class="choice-buttons">
+            <button id="undo-button" class="action-button secondary">Undo</button>
+            <button id="keep-button" class="action-button">Keep</button>
+        </div>
+    </div>
+
+    <div id="container"></div>
+
+    <script src="diffView.js"></script>
+</body>
+</html>

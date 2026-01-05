@@ -13,6 +13,7 @@ class ServerNotificationHandlerImpl: ServerNotificationHandler {
     var protocolProgressSubject: PassthroughSubject<LanguageServerProtocol.ProgressParams, Never>
     var conversationProgressHandler: ConversationProgressHandler = ConversationProgressHandlerImpl.shared
     var featureFlagNotifier: FeatureFlagNotifier = FeatureFlagNotifierImpl.shared
+    var copilotPolicyNotifier: CopilotPolicyNotifier = CopilotPolicyNotifierImpl.shared
 
     init() {
         self.protocolProgressSubject = PassthroughSubject<ProgressParams, Never>()
@@ -35,10 +36,22 @@ class ServerNotificationHandlerImpl: ServerNotificationHandler {
             }
         } else {
             switch methodName {
-            case "featureFlagsNotification":
+            case "copilot/didChangeFeatureFlags":
                 if let data = try? JSONEncoder().encode(notification.params),
-                    let featureFlags = try? JSONDecoder().decode(FeatureFlags.self, from: data) {
-                    featureFlagNotifier.handleFeatureFlagNotification(featureFlags)
+                   let didChangeFeatureFlagsParams = try? JSONDecoder().decode(
+                    DidChangeFeatureFlagsParams.self,
+                    from: data
+                   ) {
+                    featureFlagNotifier.handleFeatureFlagNotification(didChangeFeatureFlagsParams)
+                }
+                break
+            case "policy/didChange":
+                if let data = try? JSONEncoder().encode(notification.params),
+                   let policy = try? JSONDecoder().decode(
+                    CopilotPolicy.self,
+                    from: data
+                   ) {
+                    copilotPolicyNotifier.handleCopilotPolicyNotification(policy)
                 }
                 break
             default:

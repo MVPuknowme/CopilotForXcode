@@ -7,16 +7,50 @@ extension KeyboardShortcuts.Name {
     static let showHideWidget = Self("ShowHideWidget")
 }
 
+public enum TabIndex: Int, CaseIterable {
+    case general = 0
+    case advanced = 1
+    case tools = 2
+    case byok = 3
+    
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .advanced: return "Advanced"
+        case .tools: return "Tools"
+        case .byok: return "Models"
+        }
+    }
+    
+    var image: String {
+        switch self {
+        case .general: return "CopilotLogo"
+        case .advanced: return "gearshape.2.fill"
+        case .tools: return "wrench.and.screwdriver.fill"
+        case .byok: return "Model"
+        }
+    }
+    
+    var isSystemImage: Bool {
+        switch self {
+        case .general, .byok: return false
+        default: return true
+        }
+    }
+}
+
 @Reducer
-struct HostApp {
+public struct HostApp {
     @ObservableState
-    struct State: Equatable {
+    public struct State: Equatable {
         var general = General.State()
+        public var activeTabIndex: TabIndex = .general
     }
 
-    enum Action: Equatable {
+    public enum Action: Equatable {
         case appear
         case general(General.Action)
+        case setActiveTab(TabIndex)
     }
 
     @Dependency(\.toast) var toast
@@ -25,17 +59,21 @@ struct HostApp {
         KeyboardShortcuts.userDefaults = .shared
     }
 
-    var body: some ReducerOf<Self> {
+    public var body: some ReducerOf<Self> {
         Scope(state: \.general, action: /Action.general) {
             General()
         }
 
-        Reduce { _, action in
+        Reduce { state, action in
             switch action {
             case .appear:
                 return .none
 
             case .general:
+                return .none
+
+            case .setActiveTab(let index):
+                state.activeTabIndex = index
                 return .none
             }
         }
@@ -66,5 +104,3 @@ extension DependencyValues {
         set { self[UserDefaultsDependencyKey.self] = newValue }
     }
 }
-
-

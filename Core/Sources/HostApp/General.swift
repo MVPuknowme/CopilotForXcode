@@ -8,24 +8,28 @@ import XPCShared
 import Logger
 
 @Reducer
-struct General {
+public struct General {
     @ObservableState
-    struct State: Equatable {
+    public struct State: Equatable {
         var xpcServiceVersion: String?
+        var xpcCLSVersion: String?
         var isAccessibilityPermissionGranted: ObservedAXStatus = .unknown
         var isExtensionPermissionGranted: ExtensionPermissionStatus = .unknown
+        var xpcServiceAuthStatus: AuthStatus = .init(status: .unknown)
         var isReloading = false
     }
 
-    enum Action: Equatable {
+    public enum Action: Equatable {
         case appear
         case setupLaunchAgentIfNeeded
         case openExtensionManager
         case reloadStatus
         case finishReloading(
             xpcServiceVersion: String,
+            xpcCLSVersion: String?,
             axStatus: ObservedAXStatus,
-            extensionStatus: ExtensionPermissionStatus
+            extensionStatus: ExtensionPermissionStatus,
+            authStatus: AuthStatus
         )
         case failedReloading
         case retryReloading
@@ -35,7 +39,7 @@ struct General {
     
     struct ReloadStatusCancellableId: Hashable {}
     
-    var body: some ReducerOf<Self> {
+    public var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .appear:
@@ -58,7 +62,7 @@ struct General {
                                 .setupLaunchAgentForTheFirstTimeIfNeeded()
                         } catch {
                             Logger.ui.error("Failed to setup launch agent. \(error.localizedDescription)")
-                            toast(error.localizedDescription, .error)
+                            toast("Operation failed: permission denied. This may be due to missing background permissions.", .error)
                         }
                         await send(.reloadStatus)
                     }
@@ -90,10 +94,14 @@ struct General {
                             let isAccessibilityPermissionGranted = try await service
                                 .getXPCServiceAccessibilityPermission()
                             let isExtensionPermissionGranted = try await service.getXPCServiceExtensionPermission()
+                            let xpcServiceAuthStatus = try await service.getXPCServiceAuthStatus() ?? .init(status: .unknown)
+                            let xpcCLSVersion = try await service.getXPCCLSVersion()
                             await send(.finishReloading(
                                 xpcServiceVersion: xpcServiceVersion,
+                                xpcCLSVersion: xpcCLSVersion,
                                 axStatus: isAccessibilityPermissionGranted,
-                                extensionStatus: isExtensionPermissionGranted
+                                extensionStatus: isExtensionPermissionGranted,
+                                authStatus: xpcServiceAuthStatus
                             ))
                         } else {
                             toast("Launching service app.", .info)
@@ -103,7 +111,7 @@ struct General {
                     } catch let error as XPCCommunicationBridgeError {
                         Logger.ui.error("Failed to reach communication bridge. \(error.localizedDescription)")
                         toast(
-                            "Failed to reach communication bridge. \(error.localizedDescription)",
+                            "Unable to connect to the communication bridge. The helper application didn't respond. This may be due to missing background permissions.",
                             .error
                         )
                         await send(.failedReloading)
@@ -114,10 +122,12 @@ struct General {
                     }
                 }.cancellable(id: ReloadStatusCancellableId(), cancelInFlight: true)
 
-            case let .finishReloading(version, axStatus, extensionStatus):
+            case let .finishReloading(version, clsVersion, axStatus, extensionStatus, authStatus):
                 state.xpcServiceVersion = version
                 state.isAccessibilityPermissionGranted = axStatus
                 state.isExtensionPermissionGranted = extensionStatus
+                state.xpcServiceAuthStatus = authStatus
+                state.xpcCLSVersion = clsVersion
                 state.isReloading = false
                 return .none
 

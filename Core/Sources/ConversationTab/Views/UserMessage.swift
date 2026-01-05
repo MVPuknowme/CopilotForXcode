@@ -7,51 +7,111 @@ import SwiftUI
 import Status
 import Cache
 import ChatTab
+import ConversationServiceProvider
+import SwiftUIFlowLayout
+import ChatAPIService
+
+private let MAX_TEXT_LENGTH = 10000 // Maximum characters to prevent crashes
 
 struct UserMessage: View {
     var r: Double { messageBubbleCornerRadius }
     let id: String
     let text: String
+    let imageReferences: [ImageReference]
     let chat: StoreOf<Chat>
+    let editorCornerRadius: Double
+    let requestType: RequestType
     @Environment(\.colorScheme) var colorScheme
-    @ObservedObject private var statusObserver = StatusObserver.shared
+    @State var isMessageHovering: Bool = false
+
+    // Truncate the displayed user message if it's too long.
+    private var displayText: String {
+        if text.count > MAX_TEXT_LENGTH {
+            return String(text.prefix(MAX_TEXT_LENGTH)) + "\n… (message too long, rest hidden)"
+        }
+        return text
+    }
     
-    struct AvatarView: View {
-        @ObservedObject private var avatarViewModel = AvatarViewModel.shared
-        
-        var body: some View {
-            if let avatarImage = avatarViewModel.avatarImage {
-                avatarImage
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
-            } else {
-                Image(systemName: "person.circle")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-            }
+    private var isEditing: Bool {
+        if case .editUserMessage(let editId) = chat.state.editorMode {
+            return editId == id
+        }
+        return false
+    }
+    
+    private var editorMode: Chat.EditorMode { .editUserMessage(id) }
+    
+    private var isConversationMessage: Bool { requestType == .conversation }
+
+    var body: some View {
+        if !isEditing {
+            messageView
+        } else {
+            MessageInputArea(editorMode: editorMode, chat: chat, editorCornerRadius: editorCornerRadius)
         }
     }
 
-    var body: some View {
+    var messageView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 4) {
-                    AvatarView()
-
-                    Text(statusObserver.authStatus.username ?? "")
-                        .chatMessageHeaderTextStyle()
-                        .padding(2)
-                    
-                    Spacer()
-                }
+                textView
+                    .scaledPadding(.vertical, 8)
+                    .scaledPadding(.horizontal, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: r)
+                            .fill(isMessageHovering ? Color("DarkBlue") : Color("LightBlue"))
+                    )
+                    .overlay(
+                        Group {
+                            if isConversationMessage {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        chat.send(.setEditorMode(.editUserMessage(id)))
+                                    }
+                                    .allowsHitTesting(true)
+                            }
+                        }
+                    )
+                    .onHover { isHovered in
+                        if isConversationMessage {
+                            isMessageHovering = isHovered
+                            if isHovered {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 
-                ThemedMarkdownText(text: text, chat: chat)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !imageReferences.isEmpty {
+                    FlowLayout(mode: .scrollable, items: imageReferences, itemSpacing: 4) { item in
+                        ImageReferenceItemView(item: item)
+                    }
+                    .environment(\.layoutDirection, .rightToLeft)
+                }
             }
         }
-        .shadow(color: .black.opacity(0.05), radius: 6)
+    }
+    
+    var textView: some View {
+        ThemedMarkdownText(text: displayText, chat: chat)
+    }
+}
+
+private struct MessageInputArea: View {
+    let editorMode: Chat.EditorMode
+    let chat: StoreOf<Chat>
+    let editorCornerRadius: Double
+    
+    var body: some View {
+        ChatPanelInputArea(
+            chat: chat,
+            r: editorCornerRadius,
+            editorMode: editorMode
+        )
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -73,10 +133,13 @@ struct UserMessage_Previews: PreviewProvider {
             - (void)bar {}
             ```
             """#,
+            imageReferences: [],
             chat: .init(
                 initialState: .init(history: [] as [DisplayedChatMessage], isReceivingMessage: false),
                 reducer: { Chat(service: ChatService.service(for: chatTabInfo)) }
-            )
+            ),
+            editorCornerRadius: 4,
+            requestType: .conversation
         )
         .padding()
         .fixedSize(horizontal: true, vertical: true)

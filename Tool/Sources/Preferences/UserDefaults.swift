@@ -13,8 +13,14 @@ public extension UserDefaults {
     static func setupDefaultSettings() {
         shared.setupDefaultValue(for: \.quitXPCServiceOnXcodeAndAppQuit)
         shared.setupDefaultValue(for: \.realtimeSuggestionToggle)
+        shared.setupDefaultValue(for: \.realtimeNESToggle)
         shared.setupDefaultValue(for: \.realtimeSuggestionDebounce)
         shared.setupDefaultValue(for: \.suggestionPresentationMode)
+        shared.setupDefaultValue(for: \.autoAttachChatToXcode)
+        shared.setupDefaultValue(for: \.enableFixError)
+        shared.setupDefaultValue(for: \.enableSubagent)
+        shared.setupDefaultValue(for: \.enableAutoApproval)
+        shared.setupDefaultValue(for: \.trustToolAnnotations)
         shared.setupDefaultValue(for: \.widgetColorScheme)
         shared.setupDefaultValue(for: \.customCommands)
         shared.setupDefaultValue(
@@ -59,6 +65,10 @@ public extension UserDefaults {
                 ofSize: shared.value(for: \.chatCodeFontSize),
                 weight: .regular
             )))
+        )
+        shared.setupDefaultValue(
+            for: \.fontScale,
+            defaultValue: shared.value(for: \.fontScale)
         )
     }
 }

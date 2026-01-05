@@ -1,6 +1,5 @@
 import SwiftUI
 import Perception
-import GitHubCopilotViewModel
 import SharedUIComponents
 
 struct ChatNoAXPermissionView: View {
@@ -15,15 +14,15 @@ struct ChatNoAXPermissionView: View {
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFill()
-                        .frame(width: 64.0, height: 64.0)
+                        .scaledFrame(width: 64.0, height: 64.0)
                         .foregroundColor(.primary)
                     
                     Text("Accessibility Permission Required")
-                        .font(.largeTitle)
+                        .scaledFont(.largeTitle)
                         .multilineTextAlignment(.center)
                     
                     Text("Please grant accessibility permission for Github Copilot to work with Xcode.")
-                        .font(.body)
+                        .scaledFont(.body)
                         .multilineTextAlignment(.center)
                     
                     HStack{
@@ -32,6 +31,7 @@ struct ChatNoAXPermissionView: View {
                                 openURL(url)
                             }
                         }
+                        .scaledFont(.body)
                         .buttonStyle(.borderedProminent)
                     }
                     
@@ -43,7 +43,7 @@ struct ChatNoAXPermissionView: View {
                     maxHeight: .infinity
                 )
             }
-            .xcodeStyleFrame(cornerRadius: 10)
+            .xcodeStyleFrame()
             .ignoresSafeArea(edges: .top)
         }
     }

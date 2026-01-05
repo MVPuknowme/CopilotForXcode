@@ -1,22 +1,19 @@
-### GitHub Copilot for Xcode 0.32.0
-**🚀 Highlights**
+### GitHub Copilot for Xcode 0.46.0
 
-* Model picker for selecting LLM model for chat
-* New `/releaseNotes` slash commands for easier access to release information
+**🎄 Holiday Special**
+
+- As the holiday season approaches, we want to wish all our users a Merry Christmas and a Happy New Year! 🎅✨ This release focuses on refinements and bug fixes to ensure a smooth coding experience during the holidays. Stay tuned for more exciting features in the next release!
+
 
 **💪 Improvements**
 
-* Auto-switch focus between chat text field and file search bar
-* Support keyboard navigation for file picker in chat context
-* Enhanced instructions for granting accessibility and extension permissions
-* Improved accessibility for chat window
-* Redesigned notification and status bar menu styles
+- **Refined Tool Layout**: Enhanced the display of tool calls, including better error reporting and output details.
+- **MCP Improvements**: Added support for deleting MCP servers directly from the list.
+- **Feedback**: Updated the feedback forum link to better hear from you.
 
 **🛠️ Bug Fixes**
 
-* Resolved compatibility issues with macOS 12
-* Fixed handling of invalid workspace switch event '/'
-* Corrected chat attachment file picker search path to respect workspace scope
-* Fixed icon display across different themes
-* Added support for previously unsupported file types (.md, .txt) in attachments
-* Adjusted incorrect margins in chat window
+- Fixed an issue where the "Fix Error" window would auto-focus unexpectedly.
+- Resolved issues with `insert_edit_into_file` where changes were sometimes not applied or applied to the incorrect file.
+- Fixed a display bug in the model picker for models with same name.
+- Fixed random failures in `read_file` and `read_directory` tools.

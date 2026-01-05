@@ -117,8 +117,10 @@ Core/Package.resolved
 
 # Copilot language server
 Server/node_modules/
+Server/dist
 
 # Releases
 /releases/
 /release/
 /appcast.xml
+

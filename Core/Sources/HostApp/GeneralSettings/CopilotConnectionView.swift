@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import GitHubCopilotViewModel
 import SwiftUI
+import Client
 
 struct CopilotConnectionView: View {
     @AppStorage("username") var username: String = ""
@@ -18,23 +19,36 @@ struct CopilotConnectionView: View {
             }
         }
     }
+    
+    var accountStatusString: String {
+        switch store.xpcServiceAuthStatus.status {
+        case .loggedIn:
+            return "Active"
+        case .notLoggedIn:
+            return "Not Signed In"
+        case .notAuthorized:
+            return "No Subscription"
+        case .unknown:
+            return "Loading..."
+        }
+    }
 
     var accountStatus: some View {
         SettingsButtonRow(
             title: "GitHub Account Status Permissions",
-            subtitle: "GitHub Account: \(viewModel.status?.description ?? "Loading...")"
+            subtitle: "GitHub Account: \(accountStatusString)"
         ) {
             if viewModel.isRunningAction || viewModel.waitingForSignIn {
                 ProgressView().controlSize(.small)
             }
             Button("Refresh Connection") {
-                viewModel.checkStatus()
+                store.send(.reloadStatus)
             }
             if viewModel.waitingForSignIn {
                 Button("Cancel") {
                     viewModel.cancelWaiting()
                 }
-            } else if viewModel.status == .notSignedIn {
+            } else if store.xpcServiceAuthStatus.status == .notLoggedIn {
                 Button("Log in to GitHub") {
                     viewModel.signIn()
                 }
@@ -43,7 +57,10 @@ struct CopilotConnectionView: View {
                     isPresented: $viewModel.isSignInAlertPresented,
                     presenting: viewModel.signInResponse) { _ in
                         Button("Cancel", role: .cancel, action: {})
-                        Button("Copy Code and Open", action: viewModel.copyAndOpen)
+                        Button(
+                            "Copy Code and Open",
+                            action: { viewModel.copyAndOpen(fromHostApp: true) }
+                        )
                     } message: { response in
                         Text("""
                                Please enter the above code in the \
@@ -54,21 +71,31 @@ struct CopilotConnectionView: View {
                                """)
                     }
             }
-            if viewModel.status == .ok || viewModel.status == .alreadySignedIn ||
-                viewModel.status == .notAuthorized
-            {
-                Button("Log Out from GitHub") { viewModel.signOut()
-                    viewModel.isSignInAlertPresented = false
+            if store.xpcServiceAuthStatus.status == .loggedIn || store.xpcServiceAuthStatus.status == .notAuthorized {
+                Button("Log Out from GitHub") {
+                    Task {
+                        viewModel.signOut()
+                        viewModel.isSignInAlertPresented = false
+                        let service = try getService()
+                        do {
+                            try await service.signOutAllGitHubCopilotService()
+                        } catch {
+                            toast(error.localizedDescription, .error)
+                        }
+                    }
                 }
             }
         }
     }
 
     var connection: some View {
-        SettingsSection(title: "Account Settings", showWarning: viewModel.status == .notAuthorized) {
+        SettingsSection(
+            title: "Account Settings",
+            showWarning: store.xpcServiceAuthStatus.status == .notAuthorized
+        ) {
             accountStatus
             Divider()
-            if viewModel.status == .notAuthorized {
+            if store.xpcServiceAuthStatus.status == .notAuthorized {
                 SettingsLink(
                     url: "https://github.com/features/copilot/plans",
                     title: "Enable powerful AI features for free with the GitHub Copilot Free plan"
@@ -80,6 +107,9 @@ struct CopilotConnectionView: View {
                 title: "GitHub Copilot Account Settings"
             )
         }
+        .onReceive(DistributedNotificationCenter.default().publisher(for: .authStatusDidChange)) { _ in
+            store.send(.reloadStatus)
+        }
     }
 
     var copilotResources: some View {
@@ -90,7 +120,7 @@ struct CopilotConnectionView: View {
             )
             Divider()
             SettingsLink(
-                url: "https://github.com/orgs/community/discussions/categories/copilot",
+                url: "https://github.com/github/CopilotForXcode/discussions",
                 title: "View Copilot Feedback Forum"
             )
         }

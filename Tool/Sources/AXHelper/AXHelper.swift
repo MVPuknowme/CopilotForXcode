@@ -2,6 +2,17 @@ import XPCShared
 import XcodeInspector
 import AppKit
 
+public enum AXHelperError: LocalizedError {
+    case failedToSetValue(AXError)
+    
+    public var errorDescription: String? {
+        switch self {
+        case .failedToSetValue(let axError):
+            return "Failed to set focus element value by AccessibilityAPI: \(axError.rawValue)"
+        }
+    }
+}
+
 public struct AXHelper {
     public init() {}
     
@@ -26,6 +37,7 @@ public struct AXHelper {
             if let onError = onError {
                 onError()
             }
+            throw AXHelperError.failedToSetValue(error)
         }
 
         // recover selection range
@@ -56,15 +68,43 @@ public struct AXHelper {
         if let oldScrollPosition,
            let scrollBar = focusElement.parent?.verticalScrollBar
         {
-            AXUIElementSetAttributeValue(
-                scrollBar,
-                kAXValueAttribute as CFString,
-                oldScrollPosition as CFTypeRef
-            )
+            Self.setScrollBarValue(scrollBar, value: oldScrollPosition)
         }
         
         if let onSuccess = onSuccess {
             onSuccess()
         }
+    }
+    
+    /// Helper method to set scroll bar value using Accessibility API
+    private static func setScrollBarValue(_ scrollBar: AXUIElement, value: Double) {
+        AXUIElementSetAttributeValue(
+            scrollBar,
+            kAXValueAttribute as CFString,
+            value as CFTypeRef
+        )
+    }
+    
+    private static func getScrollPositionForLine(_ lineNumber: Int, content: String) -> Double? {
+        let lines = content.components(separatedBy: .newlines)
+        let linesCount = lines.count
+        
+        guard lineNumber > 0 && lineNumber <= linesCount 
+        else { return nil }
+        
+        // Calculate relative position (0.0 to 1.0)
+        let relativePosition = Double(lineNumber - 1) / Double(linesCount - 1)
+        
+        // Ensure valid range
+        return (0.0 <= relativePosition && relativePosition <= 1.0) ? relativePosition : nil
+    }
+    
+    public static func scrollSourceEditorToLine(_ lineNumber: Int, content: String, focusedElement: AXUIElement) {
+        guard focusedElement.isNonNavigatorSourceEditor,
+              let scrollBar = focusedElement.parent?.verticalScrollBar,
+              let linePosition = Self.getScrollPositionForLine(lineNumber, content: content)
+        else { return }
+        
+        Self.setScrollBarValue(scrollBar, value: linePosition)
     }
 }

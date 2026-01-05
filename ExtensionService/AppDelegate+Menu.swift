@@ -6,6 +6,7 @@ import SuggestionBasic
 import XcodeInspector
 import Logger
 import StatusBarItemView
+import GitHubCopilotViewModel
 
 extension AppDelegate {
     fileprivate var statusBarMenuIdentifier: NSUserInterfaceItemIdentifier {
@@ -40,7 +41,7 @@ extension AppDelegate {
 
         openCopilotForXcodeItem = NSMenuItem(
             title: "Settings",
-            action: #selector(openCopilotForXcode),
+            action: #selector(openCopilotForXcodeSettings),
             keyEquivalent: ""
         )
 
@@ -87,6 +88,12 @@ extension AppDelegate {
             action: nil,
             keyEquivalent: ""
         )
+        
+        toggleNES = NSMenuItem(
+            title: "Enable/Disable Next Edit Suggestions (NES)",
+            action: #selector(toggleNESEnabled),
+            keyEquivalent: ""
+        )
 
         // Auth menu item with custom view
         accountItem = NSMenuItem()
@@ -101,13 +108,28 @@ extension AppDelegate {
             keyEquivalent: ""
         )
         authStatusItem.isHidden = true
-
-        upSellItem = NSMenuItem(
-            title: "",
-            action: #selector(openUpSellLink),
-            keyEquivalent: ""
+        
+        quotaItem = NSMenuItem()
+        quotaItem.view = QuotaView(
+            chat: .init(
+                percentRemaining: 0,
+                unlimited: false,
+                overagePermitted: false
+            ),
+            completions: .init(
+                percentRemaining: 0,
+                unlimited: false,
+                overagePermitted: false
+            ),
+            premiumInteractions: .init(
+                percentRemaining: 0,
+                unlimited: false,
+                overagePermitted: false
+            ),
+            resetDate: "",
+            copilotPlan: ""
         )
-        upSellItem.isHidden = true
+        quotaItem.isHidden = true
 
         let openDocs = NSMenuItem(
             title: "View Documentation",
@@ -136,7 +158,8 @@ extension AppDelegate {
         statusBarMenu.addItem(accountItem)
         statusBarMenu.addItem(.separator())
         statusBarMenu.addItem(authStatusItem)
-        statusBarMenu.addItem(upSellItem)
+        statusBarMenu.addItem(.separator())
+        statusBarMenu.addItem(quotaItem)
         statusBarMenu.addItem(.separator())
         statusBarMenu.addItem(axStatusItem)
         statusBarMenu.addItem(extensionStatusItem)
@@ -146,6 +169,7 @@ extension AppDelegate {
         statusBarMenu.addItem(openChat)
         statusBarMenu.addItem(toggleCompletions)
         statusBarMenu.addItem(toggleIgnoreLanguage)
+        statusBarMenu.addItem(toggleNES)
         statusBarMenu.addItem(.separator())
         statusBarMenu.addItem(openCopilotForXcodeItem)
         statusBarMenu.addItem(openDocs)
@@ -186,6 +210,15 @@ extension AppDelegate: NSMenuDelegate {
                     toggleIgnoreLanguage.title = "No Active Document"
                     toggleIgnoreLanguage.action = nil
                 }
+            }
+            
+            if toggleNES != nil {
+                toggleNES.title = "\(UserDefaults.shared.value(for: \.realtimeNESToggle) ? "Disable" : "Enable") Next Edit Suggestions (NES)"
+            }
+
+            Task {
+                await forceAuthStatusCheck()
+                updateStatusBarItem()
             }
 
         case xcodeInspectorDebugMenuIdentifier:
@@ -300,6 +333,19 @@ private extension AppDelegate {
         }
     }
     
+    @objc func toggleNESEnabled() {
+        Task {
+            let initialSetting = UserDefaults.shared.value(for: \.realtimeNESToggle)
+            do {
+                let service = getXPCExtensionService()
+                try await service.toggleRealtimeNES()
+            } catch {
+                Logger.service.error("Failed to toggle NES enabled via XPC: \(error)")
+                UserDefaults.shared.set(!initialSetting, for: \.realtimeNESToggle)
+            }
+        }
+    }
+    
     @objc func toggleIgnoreLanguageEnabled() {
         guard let lang = DisabledLanguageList.shared.activeDocumentLanguage else { return }
 
@@ -349,15 +395,8 @@ private extension AppDelegate {
     
     @objc func openUpSellLink() {
         Task {
-            let status = await Status.shared.getStatus()
-            if status.authStatus == AuthStatus.Status.notAuthorized {
-                if let url = URL(string: "https://github.com/features/copilot/plans") {
-                    NSWorkspace.shared.open(url)
-                }
-            } else {
-                if let url = URL(string: "https://github.com/github-copilot/signup/copilot_individual") {
-                    NSWorkspace.shared.open(url)
-                }
+            if let url = URL(string: "https://aka.ms/github-copilot-settings") {
+                NSWorkspace.shared.open(url)
             }
         }
     }

@@ -3,12 +3,15 @@ import ChatTab
 import ComposableArchitecture
 import Foundation
 import SwiftUI
+import ConversationTab
+import SharedUIComponents
 
 final class ChatPanelWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
     private let storeObserver = NSObject()
+    private let fontScaleManager: FontScaleManager = .shared
 
     var minimizeWindow: () -> Void = {}
 
@@ -18,13 +21,14 @@ final class ChatPanelWindow: NSWindow {
         minimizeWindow: @escaping () -> Void
     ) {
         self.minimizeWindow = minimizeWindow
+        // Initialize with zero rect initially to prevent flashing
         super.init(
             contentRect: .zero,
             styleMask: [.resizable, .titled, .miniaturizable, .fullSizeContentView, .closable],
             backing: .buffered,
-            defer: false
+            defer: true // Use defer to prevent window from appearing immediately
         )
-
+        
         titleVisibility = .hidden
         addTitlebarAccessoryViewController({
             let controller = NSTitlebarAccessoryViewController()
@@ -41,11 +45,13 @@ final class ChatPanelWindow: NSWindow {
         level = widgetLevel(1)
         collectionBehavior = [
             .fullScreenAuxiliary,
-            .transient,
+//            .transient,
             .fullScreenPrimary,
             .fullScreenAllowsTiling,
         ]
         hasShadow = true
+        
+        // Set contentView after basic configuration
         contentView = NSHostingView(
             rootView: ChatWindowView(
                 store: store,
@@ -56,8 +62,11 @@ final class ChatPanelWindow: NSWindow {
             )
             .environment(\.chatTabPool, chatTabPool)
         )
-        setIsVisible(true)
+        
+        // Initialize as invisible first
+        alphaValue = 0
         isPanelDisplayed = false
+        setIsVisible(true)
 
         storeObserver.observe { [weak self] in
             guard let self else { return }
@@ -70,6 +79,13 @@ final class ChatPanelWindow: NSWindow {
                 }
             }
         }
+        
+        setInitialFrame()
+    }
+    
+    private func setInitialFrame() {
+        let frame = UpdateLocationStrategy.getChatPanelFrame()
+        setFrame(frame, display: false, animate: true)
     }
 
     func setFloatOnTop(_ isFloatOnTop: Bool) {
@@ -106,5 +122,22 @@ final class ChatPanelWindow: NSWindow {
 
     override func close() {
         minimizeWindow()
+    }
+    
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) {
+            switch event.charactersIgnoringModifiers {
+            case "-":
+                fontScaleManager.decreaseFontScale()
+                return true
+            case "=":
+                fontScaleManager.increaseFontScale()
+                return true
+            default:
+                break
+            }
+        }
+        
+        return super.performKeyEquivalent(with: event)
     }
 }
