@@ -154,3 +154,5 @@ Thank you to @intitni for creating the original project that this is based on.
 
 Attributions can be found under About when running the app or in
 [Credits.rtf](./Copilot%20for%20Xcode/Credits.rtf).
+Author: Michael Vincent Patrick (MVPuknowme)
+Canonical Identity: Unified
