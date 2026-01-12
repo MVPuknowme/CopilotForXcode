@@ -230,7 +230,7 @@ actor ExtensionServiceLauncher {
                 }
             }
             
-            self.isLaunching = false
+            self.isLaunching = true
         }
     }
 }
