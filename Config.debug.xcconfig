@@ -14,4 +14,28 @@ COPILOT_FORUM_URL = https:$(SLASH)$(SLASH)github.com/github/CopilotForXcode/disc
 
 // see also target Configs
 
-#include? "Config.local.xcconfig"
+#include? # Copilot Hints for aura-core.allbridge
+
+## Runtime Config Pattern
+Use AuraRuntimeConfig for all environment access:
+- AWS LCD, GRPC, RPC endpoints
+- AllBridge router URL
+- Dune API key
+- Chain ID: aura-core-allbridge-mainnet
+
+## Environment Factory Pattern
+Always initialize:
+- AuraEnvironmentFactory.create()
+- createNetworkInfo()
+- createServiceClient()
+- createTxSender()
+
+## Integration Test Pattern
+Use real AWS + AllBridge + Dune endpoints.
+Avoid mocks.
+Use flutter test --coverage.
+
+## File Locations
+- config.dart in lib/config/
+- aura_environment_factory.dart in lib/runtime/
+- integration tests in test/integration/
