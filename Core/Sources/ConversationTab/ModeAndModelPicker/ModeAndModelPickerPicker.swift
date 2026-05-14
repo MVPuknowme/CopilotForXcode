@@ -13,13 +13,10 @@ struct ModeAndModelPicker: View {
     @Binding var selectedAgent: ConversationMode
 
     @State private var selectedModel: LLMModel?
-    @State private var isHovered = false
-    @State private var isPressed = false
     @ObservedObject private var modelManager = CopilotModelManagerObservable.shared
     static var lastRefreshModelsTime: Date = .init(timeIntervalSince1970: 0)
 
     @State private var chatMode = "Ask"
-    @State private var isAgentPickerHovered = false
     
     // Separate caches for both scopes
     @State private var askScopeCache: ScopeCache = ScopeCache()
@@ -27,14 +24,7 @@ struct ModeAndModelPicker: View {
     
     @State var isMCPFFEnabled: Bool
     @State var isBYOKFFEnabled: Bool
-    @State var isEditorPreviewEnabled: Bool
     @State private var cancellables = Set<AnyCancellable>()
-    
-    @StateObject private var fontScaleManager = FontScaleManager.shared
-    
-    var fontScale: Double {
-        fontScaleManager.currentScale
-    }
 
     let attributes: [NSAttributedString.Key: NSFont] = ModelMenuItemFormatter.attributes
 
@@ -46,7 +36,6 @@ struct ModeAndModelPicker: View {
         self._selectedModel = State(initialValue: initialModel)
         self.isMCPFFEnabled = FeatureFlagNotifierImpl.shared.featureFlags.mcp
         self.isBYOKFFEnabled = FeatureFlagNotifierImpl.shared.featureFlags.byok
-        self.isEditorPreviewEnabled = FeatureFlagNotifierImpl.shared.featureFlags.editorPreviewFeatures
         updateAgentPicker()
     }
     
@@ -54,7 +43,6 @@ struct ModeAndModelPicker: View {
         FeatureFlagNotifierImpl.shared.featureFlagsDidChange.sink(receiveValue: { featureFlags in
             isMCPFFEnabled = featureFlags.mcp
             isBYOKFFEnabled = featureFlags.byok
-            isEditorPreviewEnabled = featureFlags.editorPreviewFeatures
         })
         .store(in: &cancellables)
     }
@@ -78,26 +66,11 @@ struct ModeAndModelPicker: View {
         AppState.shared.isAgentModeEnabled() ? agentScopeCache : askScopeCache
     }
 
-    // Helper method to format multiplier text
-    func formatMultiplierText(for billing: CopilotModelBilling?) -> String {
-        guard let billingInfo = billing else { return "" }
-        
-        let multiplier = billingInfo.multiplier
-        if multiplier == 0 {
-            return "Included"
-        } else {
-            let numberPart = multiplier.truncatingRemainder(dividingBy: 1) == 0
-                ? String(format: "%.0f", multiplier)
-                : String(format: "%.2f", multiplier)
-            return "\(numberPart)x"
-        }
-    }
-    
     // Update cache for specific scope only if models changed
     func updateModelCacheIfNeeded(for scope: PromptTemplateScope) {
-        let currentModels = scope == .agentPanel ?
-        modelManager.availableAgentModels + modelManager.availableAgentBYOKModels :
-        modelManager.availableChatModels + modelManager.availableChatBYOKModels
+        let clsModels = scope == .agentPanel ? modelManager.availableAgentModels : modelManager.availableChatModels
+        let byokModels = isBYOKFFEnabled ? (scope == .agentPanel ? modelManager.availableAgentBYOKModels : modelManager.availableChatBYOKModels) : []
+        let currentModels = clsModels + byokModels
         let modelsHash = currentModels.hashValue
         
         if scope == .agentPanel {
@@ -143,28 +116,13 @@ struct ModeAndModelPicker: View {
             allAvailableModels += byokModels
         }
         
-        // If editor preview is disabled and current model is auto, switch away from it
-        if !isEditorPreviewEnabled && currentModel?.isAutoModel == true {
-            // Try default model first
-            if let defaultModel = defaultModel, !defaultModel.isAutoModel {
-                AppState.shared.setSelectedModel(defaultModel)
-                selectedModel = defaultModel
-                return
-            }
-            // If default is also auto, use first non-auto available model
-            if let firstNonAuto = allAvailableModels.first(where: { !$0.isAutoModel }) {
-                AppState.shared.setSelectedModel(firstNonAuto)
-                selectedModel = firstNonAuto
-                return
-            }
-        }
-        
-        // Check if current model exists in available models for current scope using model comparison
-        let modelExists = allAvailableModels.contains { model in
+        // Find the fresh model from available models that matches the persisted selection.
+        // This ensures transient fields like degradationReason stay up to date.
+        let freshModel = allAvailableModels.first { model in
             model == currentModel
         }
-        
-        if !modelExists && currentModel != nil {
+
+        if freshModel == nil && currentModel != nil {
             // Switch to default model if current model is not available
             if let fallbackModel = defaultModel {
                 AppState.shared.setSelectedModel(fallbackModel)
@@ -177,7 +135,7 @@ struct ModeAndModelPicker: View {
                 selectedModel = nil
             }
         } else {
-            selectedModel = currentModel ?? defaultModel
+            selectedModel = freshModel ?? defaultModel
         }
     }
     
@@ -258,85 +216,6 @@ struct ModeAndModelPicker: View {
         }
     }
     
-    // Model picker menu component
-    private var modelPickerMenu: some View {
-        Menu {
-            // Group models by premium status
-            let premiumModels = copilotModels.filter { $0.isPremiumModel }
-            let standardModels = copilotModels.filter {
-                $0.isStandardModel && !$0.isAutoModel
-            }
-            let autoModel = isEditorPreviewEnabled ? copilotModels.first(where: { $0.isAutoModel }) : nil
-            
-            // Always `Auto Model` on top if available
-            if let autoModel {
-                modelButton(for: autoModel)
-            }
-            
-            // Display standard models section if available
-            modelSection(title: "Standard Models", models: standardModels)
-            
-            // Display premium models section if available
-            modelSection(title: "Premium Models", models: premiumModels)
-            
-            if isBYOKFFEnabled {
-                // Display byok models section if available
-                modelSection(title: "Other Models", models: byokModels)
-
-                Button("Manage Models...") {
-                    try? launchHostAppBYOKSettings()
-                }
-            }
-            
-            if standardModels.isEmpty {
-                Link("Add Premium Models", destination: URL(string: "https://aka.ms/github-copilot-upgrade-plan")!)
-            }
-        } label: {
-            Text(selectedModel?.displayName ?? selectedModel?.modelName ?? "")
-                // scaledFont not work here. workaround by direclty use the fontScale
-                .font(.system(size: 13 * fontScale))
-        }
-        .menuStyle(BorderlessButtonMenuStyle())
-        .frame(maxWidth: labelWidth())
-        .scaledPadding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(isHovered ? Color.gray.opacity(0.1) : Color.clear)
-        )
-        .onHover { hovering in
-            isHovered = hovering
-        }
-    }
-    
-    // Helper function to create a section of model options
-    @ViewBuilder
-    private func modelSection(title: String, models: [LLMModel]) -> some View {
-        if !models.isEmpty {
-            Section(title) {
-                ForEach(models, id: \.self) { model in
-                    modelButton(for: model)
-                }
-            }
-        }
-    }
-    
-    // Helper function to create a model selection button
-    private func modelButton(for model: LLMModel) -> some View {
-        Button {
-            AppState.shared.setSelectedModel(model)
-        } label: {
-            Text(createModelMenuItemAttributedString(
-                modelName: model.displayName ?? model.modelName,
-                isSelected: selectedModel == model,
-                cachedMultiplierText: currentCache.modelMultiplierCache[model.id.appending(model.providerName ?? "")] ?? ""
-            ))
-        }
-        .help(
-            model.isAutoModel
-                ? "Auto selects the best model for your request based on capacity and performance."
-                : model.displayName ?? model.modelName)
-    }
-    
     private var mcpButton: some View {
         Group {
             if isMCPFFEnabled {
@@ -393,7 +272,13 @@ struct ModeAndModelPicker: View {
                 // Model Picker
                 Group {
                     if !copilotModels.isEmpty && selectedModel != nil {
-                        modelPickerMenu
+                        ChatModelPicker(
+                            selectedModel: selectedModel,
+                            copilotModels: copilotModels,
+                            byokModels: byokModels,
+                            isBYOKFFEnabled: isBYOKFFEnabled,
+                            currentCache: currentCache
+                        )
                     } else {
                         EmptyView()
                     }
@@ -433,9 +318,6 @@ struct ModeAndModelPicker: View {
             .onChange(of: isBYOKFFEnabled) { _ in
                 updateCurrentModel()
             }
-            .onChange(of: isEditorPreviewEnabled) { _ in
-                updateCurrentModel()
-            }
             .onReceive(NotificationCenter.default.publisher(for: .gitHubCopilotSelectedModelDidChange)) { _ in
                 updateCurrentModel()
             }
@@ -443,15 +325,6 @@ struct ModeAndModelPicker: View {
                 subscribeToFeatureFlagsDidChangeEvent()
             }
         }
-    }
-
-    func labelWidth() -> CGFloat {
-        guard let selectedModel = selectedModel else { return 100 }
-        let displayName = selectedModel.displayName ?? selectedModel.modelName
-        let width = displayName.size(
-            withAttributes: attributes
-        ).width
-        return CGFloat(width * fontScale + 20)
     }
 
     @MainActor
@@ -468,18 +341,6 @@ struct ModeAndModelPicker: View {
         }
     }
 
-    private func createModelMenuItemAttributedString(
-        modelName: String,
-        isSelected: Bool,
-        cachedMultiplierText: String
-    ) -> AttributedString {
-        return ModelMenuItemFormatter.createModelMenuItemAttributedString(
-            modelName: modelName,
-            isSelected: isSelected,
-            multiplierText: cachedMultiplierText,
-            targetWidth: currentCache.cachedMaxWidth
-        )
-    }
 }
 
 struct ModelPicker_Previews: PreviewProvider {

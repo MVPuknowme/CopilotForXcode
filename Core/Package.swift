@@ -8,7 +8,7 @@ import PackageDescription
 
 let package = Package(
     name: "Core",
-    platforms: [.macOS(.v12)],
+    platforms: [.macOS(.v13)],
     products: [
         .library(
             name: "Service",
@@ -75,6 +75,7 @@ let package = Package(
             dependencies: [
                 "SuggestionWidget",
                 "SuggestionService",
+                "SuggestionInjector",
                 "ChatService",
                 "PromptToCodeService",
                 "ConversationTab",
@@ -123,6 +124,7 @@ let package = Package(
                     "Client",
                     "LaunchAgentManager",
                     "GitHubCopilotViewModel",
+                    "UpdateChecker",
                     .product(name: "SuggestionProvider", package: "Tool"),
                     .product(name: "Toast", package: "Tool"),
                     .product(name: "SharedUIComponents", package: "Tool"),
@@ -202,6 +204,7 @@ let package = Package(
                 name: "ConversationTab",
                 dependencies: [
                     "ChatService",
+                    "GitHubCopilotViewModel",
                     .product(name: "SharedUIComponents", package: "Tool"),
                     .product(name: "ChatAPIService", package: "Tool"),
                     .product(name: "Logger", package: "Tool"),
@@ -225,6 +228,7 @@ let package = Package(
                     "ConversationTab",
                     "GitHubCopilotViewModel",
                     "PersistMiddleware",
+                    .product(name: "CGEventOverride", package: "CGEventOverride"),
                     .product(name: "GitHubCopilotService", package: "Tool"),
                     .product(name: "Toast", package: "Tool"),
                     .product(name: "UserDefaultsObserver", package: "Tool"),

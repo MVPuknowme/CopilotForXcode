@@ -101,6 +101,7 @@ public protocol GitHubCopilotConversationServiceType {
     func models() async throws -> [CopilotModel]
     func registerTools(tools: [LanguageModelToolInformation]) async throws -> [LanguageModelTool]
     func updateToolsStatus(params: UpdateToolsStatusParams) async throws -> [LanguageModelTool]
+    func generateThinkingTitle(params: GenerateThinkingTitleParams) async throws -> GenerateThinkingTitleResponse
 }
 
 protocol GitHubCopilotLSP {
@@ -170,6 +171,8 @@ public extension Notification.Name {
         .Name("com.github.CopilotForXcode.GithubCopilotAgentAutoApprovalDidChange")
     static let githubCopilotAgentTrustToolAnnotationsDidChange = Notification
         .Name("com.github.CopilotForXcode.GithubCopilotAgentTrustToolAnnotationsDidChange")
+    static let githubCopilotAgentAutoCompressDidChange = Notification
+        .Name("com.github.CopilotForXcode.GithubCopilotAgentAutoCompressDidChange")
 }
 
 public class GitHubCopilotBaseService {
@@ -806,6 +809,11 @@ public final class GitHubCopilotService:
         } catch {
             throw error
         }
+    }
+
+    @GitHubCopilotSuggestionActor
+    public func generateThinkingTitle(params: GenerateThinkingTitleParams) async throws -> GenerateThinkingTitleResponse {
+        try await sendRequest(GitHubCopilotRequest.GenerateThinkingTitle(params: params))
     }
 
     @GitHubCopilotSuggestionActor
@@ -1483,6 +1491,10 @@ public final class GitHubCopilotService:
                 DistributedNotificationCenter.default()
                     .publisher(for: .githubCopilotAgentTrustToolAnnotationsDidChange)
                     .map { _ in "agentTrustToolAnnotations" }
+                    .eraseToAnyPublisher(),
+                DistributedNotificationCenter.default()
+                    .publisher(for: .githubCopilotAgentAutoCompressDidChange)
+                    .map { _ in "agentAutoCompress" }
                     .eraseToAnyPublisher()
             )
             

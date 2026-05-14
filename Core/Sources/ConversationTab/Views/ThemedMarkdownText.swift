@@ -174,15 +174,14 @@ struct MarkdownCodeBlockView: View {
 
 struct ThemedMarkdownText_Previews: PreviewProvider {
     static var previews: some View {
-        let chatTabInfo = ChatTabInfo(id: "id", workspacePath: "path", username: "name")
         ThemedMarkdownText(
-            text:"""
-    ```swift
-    let sumClosure: (Int, Int) -> Int = { (a: Int, b: Int) in
-        return a + b
-    }
-    ```
-    """,
-            context: .init(onInsert: {_ in  print("Inserted") }))
+            text: """
+            ```swift
+            let sumClosure: (Int, Int) -> Int = { (a: Int, b: Int) in
+                return a + b
+            }
+            ```
+            """,
+            context: .init(onInsert: { _ in print("Inserted") }))
     }
 }

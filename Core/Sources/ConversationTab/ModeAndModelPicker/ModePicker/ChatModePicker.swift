@@ -23,7 +23,6 @@ public struct ChatModePicker: View {
     let projectRootURL: URL?
     @Environment(\.colorScheme) var colorScheme
     @State var isAgentModeFFEnabled: Bool
-    @State var isEditorPreviewFFEnabled: Bool
     @State var isCustomAgentPolicyEnabled: Bool
     @State private var cancellables = Set<AnyCancellable>()
     @State private var builtInAgents: [ConversationMode] = []
@@ -44,7 +43,6 @@ public struct ChatModePicker: View {
         self.projectRootURL = projectRootURL
         self.onScopeChange = onScopeChange
         isAgentModeFFEnabled = FeatureFlagNotifierImpl.shared.featureFlags.agentMode
-        isEditorPreviewFFEnabled = FeatureFlagNotifierImpl.shared.featureFlags.editorPreviewFeatures
         isCustomAgentPolicyEnabled = CopilotPolicyNotifierImpl.shared.copilotPolicy.customAgentEnabled
     }
 
@@ -78,7 +76,6 @@ public struct ChatModePicker: View {
     private func subscribeToFeatureFlagsDidChangeEvent() {
         FeatureFlagNotifierImpl.shared.featureFlagsDidChange.sink(receiveValue: { featureFlags in
             isAgentModeFFEnabled = featureFlags.agentMode
-            isEditorPreviewFFEnabled = featureFlags.editorPreviewFeatures
         })
         .store(in: &cancellables)
     }
@@ -188,7 +185,7 @@ public struct ChatModePicker: View {
                         customAgents: customAgents,
                         selectedAgent: selectedAgent,
                         selectedIconName: displayIconName,
-                        isCustomAgentEnabled: isEditorPreviewFFEnabled && isCustomAgentPolicyEnabled,
+                        isCustomAgentEnabled: isCustomAgentPolicyEnabled,
                         onSelectAgent: { setAgentMode($0) },
                         onEditAgent: { openAgentFileInXcode($0) },
                         onDeleteAgent: { deleteCustomAgent($0) },
@@ -217,13 +214,6 @@ public struct ChatModePicker: View {
         .onChange(of: isAgentModeFFEnabled) { newAgentModeFFEnabled in
             if !newAgentModeFFEnabled {
                 setAskMode()
-            }
-        }
-        .onChange(of: isEditorPreviewFFEnabled) { newValue in
-            // If editor preview is disabled and current agent is not the default agent, reset to default
-            if !newValue && chatMode == ChatMode.Agent.rawValue && !selectedAgent.isDefaultAgent {
-                let defaultAgent = builtInAgents.first(where: { $0.isDefaultAgent }) ?? .defaultAgent
-                setAgentMode(defaultAgent)
             }
         }
         .onChange(of: isCustomAgentPolicyEnabled) { newValue in
@@ -277,7 +267,7 @@ public struct ChatModePicker: View {
         // Try to find the agent
         if let agent = findAgent(byId: subMode) {
             // If it's not the default agent and custom agents are disabled, reset to default
-            if !agent.isDefaultAgent && (!isEditorPreviewFFEnabled || !isCustomAgentPolicyEnabled) {
+            if !agent.isDefaultAgent && !isCustomAgentPolicyEnabled {
                 selectedAgent = builtInAgents.first(where: { $0.isDefaultAgent }) ?? .defaultAgent
                 AppState.shared.setSelectedAgentSubMode("Agent")
                 return

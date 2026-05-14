@@ -158,7 +158,9 @@ public struct ChatMessage: Equatable, Codable {
     
     /// The steps of conversation progress
     public var steps: [ConversationProgressStep]
-    
+
+    public var thinking: [MessageThinking]
+
     public var editAgentRounds: [AgentRound]
     
     public var parentTurnId: String?
@@ -198,6 +200,7 @@ public struct ChatMessage: Equatable, Codable {
         rating: ConversationRating = .unrated,
         steps: [ConversationProgressStep] = [],
         editAgentRounds: [AgentRound] = [],
+        thinking: [MessageThinking] = [],
         parentTurnId: String? = nil,
         panelMessages: [CopilotShowMessageParams] = [],
         codeReviewRound: CodeReviewRound? = nil,
@@ -221,6 +224,7 @@ public struct ChatMessage: Equatable, Codable {
         self.errorMessages = errorMessages
         self.rating = rating
         self.steps = steps
+        self.thinking = thinking
         self.editAgentRounds = editAgentRounds
         self.parentTurnId = parentTurnId
         self.panelMessages = panelMessages
@@ -264,6 +268,7 @@ public struct ChatMessage: Equatable, Codable {
         suggestedTitle: String? = nil,
         steps: [ConversationProgressStep] = [],
         editAgentRounds: [AgentRound] = [],
+        thinking: [MessageThinking] = [],
         parentTurnId: String? = nil,
         codeReviewRound: CodeReviewRound? = nil,
         fileEdits: [FileEdit] = [],
@@ -283,6 +288,7 @@ public struct ChatMessage: Equatable, Codable {
             suggestedTitle: suggestedTitle,
             steps: steps,
             editAgentRounds: editAgentRounds,
+            thinking: thinking,
             parentTurnId: parentTurnId,
             codeReviewRound: codeReviewRound,
             fileEdits: fileEdits,

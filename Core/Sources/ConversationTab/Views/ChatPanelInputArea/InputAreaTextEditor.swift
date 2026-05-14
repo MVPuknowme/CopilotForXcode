@@ -173,13 +173,18 @@ struct InputAreaTextEditor: View {
                     ModeAndModelPicker(projectRootURL: projectRootURL, selectedAgent: $chat.selectedAgent)
 
                     Spacer()
-                    
-                    if chat.editorMode.isDefault {
+
+                    if let contextSizeInfo = chat.contextSizeInfo {
+                        ContextSizeButton(contextSizeInfo: contextSizeInfo)
+                            .padding(.trailing, 4)
+                    }
+
+                    if chat.editorMode.isDefault && !isRequestingConversation {
                         codeReviewButton
                             .buttonStyle(HoverButtonStyle(padding: 0, hoverColor: .clear))
-                            .opacity(isRequestingConversation ? 0 : 1)
+                            .padding(.trailing, 4)
                     }
-                    
+
                     ZStack {
                         sendButton
                             .opacity(isRequestingConversation || isRequestingCodeReview ? 0 : 1)

@@ -15,6 +15,7 @@ extension ChatMessage {
         var suggestedTitle: String?
         var errorMessages: [String] = []
         var steps: [ConversationProgressStep]
+        var thinking: [MessageThinking]
         var editAgentRounds: [AgentRound]
         var parentTurnId: String?
         var panelMessages: [CopilotShowMessageParams]
@@ -35,6 +36,14 @@ extension ChatMessage {
             suggestedTitle = try container.decodeIfPresent(String.self, forKey: .suggestedTitle)
             errorMessages = try container.decodeIfPresent([String].self, forKey: .errorMessages) ?? []
             steps = try container.decodeIfPresent([ConversationProgressStep].self, forKey: .steps) ?? []
+            // Decode thinking as either an array (current format) or a single value (legacy format).
+            if let array = try? container.decodeIfPresent([MessageThinking].self, forKey: .thinking) {
+                thinking = array
+            } else if let single = try? container.decodeIfPresent(MessageThinking.self, forKey: .thinking) {
+                thinking = [single]
+            } else {
+                thinking = []
+            }
             editAgentRounds = try container.decodeIfPresent([AgentRound].self, forKey: .editAgentRounds) ?? []
             parentTurnId = try container.decodeIfPresent(String.self, forKey: .parentTurnId)
             panelMessages = try container.decodeIfPresent([CopilotShowMessageParams].self, forKey: .panelMessages) ?? []
@@ -55,6 +64,7 @@ extension ChatMessage {
             suggestedTitle: String?,
             errorMessages: [String] = [],
             steps: [ConversationProgressStep]?,
+            thinking: [MessageThinking] = [],
             editAgentRounds: [AgentRound]? = nil,
             parentTurnId: String? = nil,
             panelMessages: [CopilotShowMessageParams]? = nil,
@@ -72,6 +82,7 @@ extension ChatMessage {
             self.suggestedTitle = suggestedTitle
             self.errorMessages = errorMessages
             self.steps = steps ?? []
+            self.thinking = thinking
             self.editAgentRounds = editAgentRounds ?? []
             self.parentTurnId = parentTurnId
             self.panelMessages = panelMessages ?? []
@@ -93,6 +104,7 @@ extension ChatMessage {
             suggestedTitle: self.suggestedTitle,
             errorMessages: self.errorMessages,
             steps: self.steps,
+            thinking: self.thinking,
             editAgentRounds: self.editAgentRounds,
             parentTurnId: self.parentTurnId,
             panelMessages: self.panelMessages,
@@ -133,6 +145,7 @@ extension ChatMessage {
                     rating: turnItemData.rating,
                     steps: turnItemData.steps,
                     editAgentRounds: turnItemData.editAgentRounds,
+                    thinking: turnItemData.thinking,
                     parentTurnId: turnItemData.parentTurnId,
                     panelMessages: turnItemData.panelMessages,
                     fileEdits: turnItemData.fileEdits,

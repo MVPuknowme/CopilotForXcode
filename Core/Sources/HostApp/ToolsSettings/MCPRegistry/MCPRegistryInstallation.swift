@@ -90,8 +90,54 @@ public class MCPRegistryService: ObservableObject {
     public static let shared = MCPRegistryService()
     public static let apiVersion = "v0.1"
     @AppStorage(\.mcpRegistryBaseURL) var mcpRegistryBaseURL
-    
+    @Published public private(set) var mcpRegistryEntries: [MCPRegistryEntry]?
+
     private init() {}
+
+    /// Fetches the MCP registry allowlist from the language server and updates
+    /// ``mcpRegistryEntries``. Safe to call from any view's `onAppear` –
+    /// duplicate in-flight calls are coalesced via the `isRefreshing` flag.
+    private var isRefreshing = false
+
+    public func refreshAllowlist() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        do {
+            let service = try getService()
+
+            let authStatus = try await service.getXPCServiceAuthStatus()
+            guard authStatus?.status == .loggedIn else {
+                Logger.client.info("User not logged in, skipping MCP registry allowlist fetch")
+                mcpRegistryEntries = nil
+                return
+            }
+
+            let result = try await service.getMCPRegistryAllowlist()
+
+            guard let result = result, !result.mcpRegistries.isEmpty else {
+                if result == nil {
+                    Logger.client.error("Failed to get allowlist result")
+                } else {
+                    mcpRegistryEntries = []
+                }
+                return
+            }
+
+            if let firstRegistry = result.mcpRegistries.first {
+                let entry = MCPRegistryEntry(
+                    url: firstRegistry.url,
+                    registryAccess: firstRegistry.registryAccess,
+                    owner: firstRegistry.owner
+                )
+                mcpRegistryEntries = [entry]
+                Logger.client.info("Current MCP Registry Entry: \(entry)")
+            }
+        } catch {
+            Logger.client.error("Failed to get MCP allowlist from registry: \(error)")
+        }
+    }
 
     public static func getServerName(from serverDetail: MCPRegistryServerDetail) -> String {
         return serverDetail.name
@@ -304,7 +350,7 @@ public class MCPRegistryService: ObservableObject {
 
         // Save configuration
         let jsonData = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
-        try jsonData.write(to: configFileURL)
+        try jsonData.write(to: configFileURL, options: .atomic)
 
         // Note: UserDefaults update and notification will be handled by ToolsConfigView's file monitor
         // with debouncing to prevent duplicate notifications

@@ -9,7 +9,7 @@ public struct ScopeCache {
 
 // MARK: - Model Menu Item Formatting
 public struct ModelMenuItemFormatter {
-    public static let minimumPadding: Int = 48
+    public static let minimumPadding: Int = 24
 
     public static let attributes: [NSAttributedString.Key: NSFont] = [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)]
     
@@ -26,9 +26,18 @@ public struct ModelMenuItemFormatter {
         modelName: String,
         isSelected: Bool,
         multiplierText: String,
-        targetWidth: CGFloat? = nil
+        targetWidth: CGFloat? = nil,
+        isDegraded: Bool = false
     ) -> AttributedString {
-        let displayName = isSelected ? "✓ \(modelName)" : "    \(modelName)"
+        let prefix: String
+        if isDegraded {
+            prefix = "⚠ "
+        } else if isSelected {
+            prefix = "✓ "
+        } else {
+            prefix = "    "
+        }
+        let displayName = "\(prefix)\(modelName)"
 
         var fullString = displayName
         var attributedString = AttributedString(fullString)
@@ -83,5 +92,37 @@ public struct ModelMenuItemFormatter {
         } else {
             return ""
         }
+    }
+
+    /// Draws the standard menu-item highlight background (accent-colored rounded rect).
+    static func drawMenuItemHighlight(
+        in frame: NSRect,
+        fontScale: Double,
+        hoverEdgeInset: CGFloat
+    ) {
+        NSGraphicsContext.saveGraphicsState()
+        NSColor.controlAccentColor.setFill()
+
+        let cornerRadius: CGFloat
+        if #available(macOS 26.0, *) {
+            cornerRadius = 8.0 * fontScale
+        } else {
+            cornerRadius = 4.0 * fontScale
+        }
+
+        let hoverWidth = frame.width - (hoverEdgeInset * 2)
+        let insetRect = NSRect(
+            x: hoverEdgeInset,
+            y: 0,
+            width: hoverWidth,
+            height: frame.height
+        )
+        let path = NSBezierPath(
+            roundedRect: insetRect,
+            xRadius: cornerRadius,
+            yRadius: cornerRadius
+        )
+        path.fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 }

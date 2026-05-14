@@ -64,11 +64,14 @@ public final class ChatService: ChatServiceType, ObservableObject {
     public var memory: ContextAwareAutoManagedChatMemory
     @Published public internal(set) var chatHistory: [ChatMessage] = []
     @Published public internal(set) var isReceivingMessage = false
+    @Published public internal(set) var isSummarizingConversation = false
     @Published public internal(set) var fileEditMap: OrderedDictionary<URL, FileEdit> = [:]
+    @Published public internal(set) var contextSizeInfo: ContextSizeInfo? = nil
     public internal(set) var requestType: RequestType? = nil
     public private(set) var chatTabInfo: ChatTabInfo
     private let conversationProvider: ConversationServiceProvider?
     private let conversationProgressHandler: ConversationProgressHandler
+    private let compressionHandler: CompressionHandler
     private let conversationContextHandler: ConversationContextHandler = ConversationContextHandlerImpl.shared
     // sync all the files in the workspace to watch for changes.
     private let watchedFilesHandler: WatchedFilesHandler = WatchedFilesHandlerImpl.shared
@@ -81,14 +84,25 @@ public final class ChatService: ChatServiceType, ObservableObject {
     private var pendingToolCallRequests: [String: ToolCallRequest] = [:]
     // Workaround: toolConfirmation request does not have parent turnId
     private var conversationTurnTracking = ConversationTurnTrackingState()
+
+    /// Single source of truth for an in-flight streaming thinking block. Sealed when the turn ends
+    /// or a non-thinking payload arrives. `clientEntryId` is stable across server delta `id` churn.
+    private struct ActiveThinkingCursor {
+        let clientEntryId: UUID
+        let targetMessageId: String
+        let originTurnId: String
+    }
+    private var activeThinking: ActiveThinkingCursor? = nil
     
     init(provider: any ConversationServiceProvider,
          memory: ContextAwareAutoManagedChatMemory = ContextAwareAutoManagedChatMemory(),
          conversationProgressHandler: ConversationProgressHandler = ConversationProgressHandlerImpl.shared,
+         compressionHandler: CompressionHandler = CompressionHandlerImpl.shared,
          chatTabInfo: ChatTabInfo) {
         self.memory = memory
         self.conversationProvider = provider
         self.conversationProgressHandler = conversationProgressHandler
+        self.compressionHandler = compressionHandler
         self.chatTabInfo = chatTabInfo
         memory.chatService = self
         
@@ -133,6 +147,19 @@ public final class ChatService: ChatServiceType, ObservableObject {
         
         conversationProgressHandler.onEnd.sink { [weak self] (token, progress) in
             self?.handleProgressEnd(token: token, progress: progress)
+        }.store(in: &cancellables)
+
+        compressionHandler.onCompressionStarted.sink { [weak self] compressionConversationId in
+            guard let self, self.conversationId == compressionConversationId else { return }
+            self.isSummarizingConversation = true
+        }.store(in: &cancellables)
+
+        compressionHandler.onCompressionCompleted.sink { [weak self] completedNotification in
+            guard let self, self.conversationId == completedNotification.conversationId else { return }
+            self.isSummarizingConversation = false
+            if let contextInfo = completedNotification.contextInfo {
+                self.contextSizeInfo = contextInfo
+            }
         }.store(in: &cancellables)
     }
     
@@ -223,14 +250,24 @@ public final class ChatService: ChatServiceType, ObservableObject {
     // this will be triggerred in conversation tab if needed
     public func restoreIfNeeded() {
         guard self.isRestored == false else { return }
-        
+
         Task {
-            let storedChatMessages = fetchAllChatMessagesFromStorage()
+            var storedChatMessages = fetchAllChatMessagesFromStorage()
+            // Force-seal any thinking entries that were persisted mid-stream (e.g. app crashed
+            // before the seal sweep ran). Otherwise they'd render with the placeholder "Thinking"
+            // title forever.
+            for messageIndex in storedChatMessages.indices where storedChatMessages[messageIndex].role == .assistant {
+                for path in Self.allThinkingPaths(in: storedChatMessages[messageIndex]) {
+                    Self.mutateThinking(at: path, in: &storedChatMessages[messageIndex]) { entry in
+                        if !entry.isComplete { entry.isComplete = true }
+                    }
+                }
+            }
             await mutateHistory { history in
                 history.append(contentsOf: storedChatMessages)
             }
         }
-        
+
         self.isRestored = true
     }
 
@@ -745,7 +782,11 @@ public final class ChatService: ChatServiceType, ObservableObject {
         guard let workDownToken = activeRequestId, workDownToken == token else {
             return
         }
-        
+
+        if let contextSize = progress.contextSize {
+            self.contextSizeInfo = contextSize
+        }
+
         let id = progress.turnId
         var content = ""
         var references: [ConversationReference] = []
@@ -756,28 +797,68 @@ public final class ChatService: ChatServiceType, ObservableObject {
         if let reply = progress.reply {
             content = reply
         }
-        
+
         if let progressReferences = progress.references, !progressReferences.isEmpty {
             references = progressReferences.toConversationReferences()
         }
-        
+
         if let progressSteps = progress.steps, !progressSteps.isEmpty {
             steps = progressSteps
         }
-        
+
         if let progressAgentRounds = progress.editAgentRounds, !progressAgentRounds.isEmpty {
             editAgentRounds = progressAgentRounds
         }
-        
-        if content.isEmpty && references.isEmpty && steps.isEmpty && editAgentRounds.isEmpty && parentTurnId == nil {
+
+        let progressThinkingDelta = progress.thinking
+        let hasThinking = !(progressThinkingDelta?.text?.allSatisfy { $0.isEmpty } ?? true)
+        let hasNonThinking = !content.isEmpty || !references.isEmpty || !steps.isEmpty || !editAgentRounds.isEmpty
+
+        // Resolve the in-flight cursor against this event. The cursor is sealed when the active
+        // turn changes, or when a non-thinking payload arrives signalling that reasoning has
+        // ended and the model is now speaking/acting.
+        if let cursor = activeThinking, cursor.originTurnId != id {
+            sealActiveThinking()
+        }
+        if !hasThinking, hasNonThinking, activeThinking != nil {
+            sealActiveThinking()
+        }
+
+        if content.isEmpty && references.isEmpty && steps.isEmpty && editAgentRounds.isEmpty && parentTurnId == nil && !hasThinking {
             return
         }
-        
+
         let messageContent = content
         let messageReferences = references
         let messageSteps = steps
-        let messageAgentRounds = editAgentRounds
+        var messageAgentRounds = editAgentRounds
         let messageParentTurnId = parentTurnId
+        var messageThinking: [MessageThinking] = []
+
+        if hasThinking, let progressThinkingDelta {
+            // Open a cursor on the first delta of a streaming block. Subsequent deltas reuse the
+            // same `clientEntryId` so `mergeThinking` concatenates into one entry even when the
+            // server's `id` changes mid-stream.
+            let cursor = activeThinking ?? {
+                let opened = ActiveThinkingCursor(
+                    clientEntryId: UUID(),
+                    targetMessageId: parentTurnId ?? id,
+                    originTurnId: id
+                )
+                activeThinking = opened
+                return opened
+            }()
+            let entry = MessageThinking(from: progressThinkingDelta, clientEntryId: cursor.clientEntryId)
+            // Route the entry: into the last agent round when this event carries one (mid-tool-loop
+            // reasoning, including sub-agent rounds), otherwise onto the message itself (pre-tool
+            // reasoning). For sub-agent events, ChatMemory.appendMessage's parent-turn merge will
+            // forward the round's thinking into the parent's last sub-round via `mergeThinking`.
+            if let lastIndex = messageAgentRounds.indices.last {
+                messageAgentRounds[lastIndex].thinking.append(entry)
+            } else {
+                messageThinking = [entry]
+            }
+        }
 
         Task {
             let message = ChatMessage(
@@ -787,6 +868,7 @@ public final class ChatService: ChatServiceType, ObservableObject {
                 references: messageReferences,
                 steps: messageSteps,
                 editAgentRounds: messageAgentRounds,
+                thinking: messageThinking,
                 parentTurnId: messageParentTurnId,
                 turnStatus: .inProgress
             )
@@ -795,8 +877,132 @@ public final class ChatService: ChatServiceType, ObservableObject {
         }
     }
 
+    /// Seals the cursor's entry: marks it `isComplete`, persists the owning message, and kicks off
+    /// the LSP title-generation request. Looking up by `clientEntryId` (set when the cursor was
+    /// opened) makes this independent of the server's per-delta `id` and of which location the
+    /// entry was routed to (top-level message, agent round, or sub-agent round).
+    private func sealActiveThinking() {
+        guard let cursor = activeThinking else { return }
+        activeThinking = nil
+        Task {
+            var sealedText: String? = nil
+            var sealedMessage: ChatMessage? = nil
+            await memory.mutateHistory { history in
+                guard let messageIndex = history.firstIndex(where: { $0.id == cursor.targetMessageId }),
+                      history[messageIndex].role == .assistant,
+                      let path = Self.findThinkingPath(clientEntryId: cursor.clientEntryId, in: history[messageIndex])
+                else { return }
+                Self.mutateThinking(at: path, in: &history[messageIndex]) { entry in
+                    guard !entry.isComplete else { return }
+                    entry.isComplete = true
+                    if let text = entry.text?.joined(), !text.isEmpty {
+                        sealedText = text
+                    }
+                }
+                sealedMessage = history[messageIndex]
+            }
+            if let sealedMessage {
+                saveChatMessageToStorage(sealedMessage)
+            }
+            guard let sealedText else { return }
+            await requestThinkingTitle(for: sealedText, cursor: cursor)
+        }
+    }
+
+    private func requestThinkingTitle(for thinkingText: String, cursor: ActiveThinkingCursor) async {
+        let extractedTitles = MessageThinking.parseSections(from: thinkingText).compactMap { $0.title }
+        let params = GenerateThinkingTitleParams(
+            thinkingContent: extractedTitles.isEmpty ? thinkingText : nil,
+            extractedTitles: extractedTitles.isEmpty ? nil : extractedTitles
+        )
+        do {
+            guard let response = try await conversationProvider?.generateThinkingTitle(params),
+                  !response.title.isEmpty else { return }
+            let trimmed = response.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = trimmed.count > 80 ? String(trimmed.prefix(80)) + "\u{2026}" : trimmed
+            guard !title.isEmpty else { return }
+            var titledMessage: ChatMessage? = nil
+            await memory.mutateHistory { history in
+                guard let messageIndex = history.firstIndex(where: { $0.id == cursor.targetMessageId }),
+                      history[messageIndex].role == .assistant,
+                      let path = Self.findThinkingPath(clientEntryId: cursor.clientEntryId, in: history[messageIndex])
+                else { return }
+                Self.mutateThinking(at: path, in: &history[messageIndex]) { $0.title = title }
+                titledMessage = history[messageIndex]
+            }
+            if let titledMessage {
+                saveChatMessageToStorage(titledMessage)
+            }
+        } catch {
+            Logger.gitHubCopilot.debug("Failed to generate thinking title: \(error)")
+        }
+    }
+
+    /// Path to a `MessageThinking` entry inside an assistant `ChatMessage`. Covers the three
+    /// places thinking can live: top-level on the message, on an agent round, or on a sub-agent
+    /// round under an agent round.
+    private enum ThinkingPath {
+        case message(entryIndex: Int)
+        case round(roundIndex: Int, entryIndex: Int)
+        case subRound(roundIndex: Int, subRoundIndex: Int, entryIndex: Int)
+    }
+
+    private static func findThinkingPath(clientEntryId: UUID, in message: ChatMessage) -> ThinkingPath? {
+        let predicate: (MessageThinking) -> Bool = { $0.clientEntryId == clientEntryId }
+        if let entryIndex = message.thinking.firstIndex(where: predicate) {
+            return .message(entryIndex: entryIndex)
+        }
+        for (roundIndex, round) in message.editAgentRounds.enumerated() {
+            if let entryIndex = round.thinking.firstIndex(where: predicate) {
+                return .round(roundIndex: roundIndex, entryIndex: entryIndex)
+            }
+            for (subRoundIndex, subRound) in (round.subAgentRounds ?? []).enumerated() {
+                if let entryIndex = subRound.thinking.firstIndex(where: predicate) {
+                    return .subRound(roundIndex: roundIndex, subRoundIndex: subRoundIndex, entryIndex: entryIndex)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// All `ThinkingPath`s in the message, in stable visit order. Used by sweeps that need to
+    /// touch every entry without knowing the cursor's `clientEntryId`.
+    private static func allThinkingPaths(in message: ChatMessage) -> [ThinkingPath] {
+        var paths: [ThinkingPath] = []
+        for entryIndex in message.thinking.indices {
+            paths.append(.message(entryIndex: entryIndex))
+        }
+        for (roundIndex, round) in message.editAgentRounds.enumerated() {
+            for entryIndex in round.thinking.indices {
+                paths.append(.round(roundIndex: roundIndex, entryIndex: entryIndex))
+            }
+            for (subRoundIndex, subRound) in (round.subAgentRounds ?? []).enumerated() {
+                for entryIndex in subRound.thinking.indices {
+                    paths.append(.subRound(roundIndex: roundIndex, subRoundIndex: subRoundIndex, entryIndex: entryIndex))
+                }
+            }
+        }
+        return paths
+    }
+
+    private static func mutateThinking(at path: ThinkingPath, in message: inout ChatMessage, _ mutate: (inout MessageThinking) -> Void) {
+        switch path {
+        case .message(let entryIndex):
+            mutate(&message.thinking[entryIndex])
+        case .round(let roundIndex, let entryIndex):
+            mutate(&message.editAgentRounds[roundIndex].thinking[entryIndex])
+        case .subRound(let roundIndex, let subRoundIndex, let entryIndex):
+            guard var subRounds = message.editAgentRounds[roundIndex].subAgentRounds else { return }
+            mutate(&subRounds[subRoundIndex].thinking[entryIndex])
+            message.editAgentRounds[roundIndex].subAgentRounds = subRounds
+        }
+    }
+
     private func handleProgressEnd(token: String, progress: ConversationProgressEnd) {
         guard let workDoneToken = activeRequestId, workDoneToken == token else { return }
+
+        sealActiveThinking()
+
         let followUp = progress.followUp
         
         if let CLSError = progress.error {
@@ -880,7 +1086,7 @@ public final class ChatService: ChatServiceType, ObservableObject {
         
         Task {
             let message = ChatMessage(
-                assistantMessageWithId: progress.turnId, 
+                assistantMessageWithId: progress.turnId,
                 chatTabID: chatTabInfo.id,
                 followUp: followUp,
                 suggestedTitle: progress.suggestedTitle,
@@ -895,8 +1101,13 @@ public final class ChatService: ChatServiceType, ObservableObject {
     private func resetOngoingRequest(with turnStatus: ChatMessage.TurnStatus = .success) {
         activeRequestId = nil
         isReceivingMessage = false
+        isSummarizingConversation = false
         requestType = nil
-        
+        // The cursor is normally cleared by sealActiveThinking() in handleProgressEnd; clear it
+        // here as a safety net for cancellation/error paths that bypass the end handler. The
+        // belt-and-suspenders sweep below catches any orphan unsealed entries.
+        activeThinking = nil
+
         // Clear turn tracking data
         conversationTurnTracking.reset()
 
@@ -927,6 +1138,15 @@ public final class ChatService: ChatServiceType, ObservableObject {
                 for i in 0..<history[lastIndex].steps.count {
                     if history[lastIndex].steps[i].status == .running {
                         history[lastIndex].steps[i].status = .cancelled
+                    }
+                }
+
+                // Belt-and-suspenders: mark any orphan unsealed thinking complete on turn end. The
+                // cursor seal in handleProgressEnd handles the normal path; this catches cancel/
+                // error cases that bypass it.
+                for path in Self.allThinkingPaths(in: history[lastIndex]) {
+                    Self.mutateThinking(at: path, in: &history[lastIndex]) { entry in
+                        if !entry.isComplete { entry.isComplete = true }
                     }
                 }
                 
@@ -1255,58 +1475,55 @@ extension ChatService {
         
         guard !isReceivingMessage else {
             activeRequestId = nil
-            throw CancellationError() 
+            throw CancellationError()
         }
         isReceivingMessage = true
         requestType = .codeReview
         let turnId = UUID().uuidString
         
-        do {
-            await CodeReviewService.shared.resetComments()
-            
-            await addCodeReviewUserMessage(id: UUID().uuidString, turnId: turnId, group: group)
-            
-            let initialBotMessage = ChatMessage(
-                assistantMessageWithId: turnId, 
-                chatTabID: chatTabInfo.id,
-                turnStatus: .inProgress,
-                requestType: .codeReview
-            )
-            await memory.appendMessage(initialBotMessage)
-            
-            guard let projectRootURL = getProjectRootURL()
-            else {
-                let round = CodeReviewRound.fromError(turnId: turnId, error: "Invalid git repository.")
-                await appendCodeReviewRound(round)
-                resetOngoingRequest(with: .error)
-                return
-            }
-            
-            let prChanges = await CurrentChangeService.getPRChanges(
-                projectRootURL, 
-                group: group,
-                shouldIncludeFile: shouldIncludeFileForReview
-            )
-            guard !prChanges.isEmpty else {
-                let round = CodeReviewRound.fromError(
-                    turnId: turnId, 
-                    error: group == .index ? "No staged changes found to review." : "No unstaged changes found to review."
-                )
-                await appendCodeReviewRound(round)
-                resetOngoingRequest()
-                return
-            }
-                        
-            let round: CodeReviewRound = .init(
-                turnId: turnId,
-                status: .waitForConfirmation,
-                request: .from(prChanges)
-            )
-            await appendCodeReviewRound(round, turnStatus: .waitForConfirmation)
-        } catch {
+        await CodeReviewService.shared.resetComments()
+        
+        await addCodeReviewUserMessage(id: UUID().uuidString, turnId: turnId, group: group)
+        
+        let initialBotMessage = ChatMessage(
+            assistantMessageWithId: turnId,
+            chatTabID: chatTabInfo.id,
+            turnStatus: .inProgress,
+            requestType: .codeReview
+        )
+        await memory.appendMessage(initialBotMessage)
+        
+        guard let projectRootURL = getProjectRootURL()
+        else {
+            let round = CodeReviewRound.fromError(turnId: turnId, error: "Invalid git repository.")
+            await appendCodeReviewRound(round)
             resetOngoingRequest(with: .error)
-            throw error
+            return
         }
+        
+        let prChanges = await CurrentChangeService.getPRChanges(
+            projectRootURL,
+            group: group,
+            shouldIncludeFile: shouldIncludeFileForReview
+        )
+        guard !prChanges.isEmpty else {
+            let round = CodeReviewRound.fromError(
+                turnId: turnId,
+                error: group == .index
+                    ? "No staged changes found to review."
+                    : "No unstaged changes found to review."
+            )
+            await appendCodeReviewRound(round)
+            resetOngoingRequest()
+            return
+        }
+        
+        let round: CodeReviewRound = .init(
+            turnId: turnId,
+            status: .waitForConfirmation,
+            request: .from(prChanges)
+        )
+        await appendCodeReviewRound(round, turnStatus: .waitForConfirmation)
     }
     
     private func shouldIncludeFileForReview(url: URL) -> Bool {

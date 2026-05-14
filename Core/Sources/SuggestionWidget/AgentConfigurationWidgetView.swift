@@ -239,7 +239,7 @@ struct AgentConfigurationWidgetView: View {
     }
 
     private func parseYAMLFrontmatter(content: String) -> YAMLFrontmatterInfo {
-        var lines = content.components(separatedBy: .newlines)
+        let lines = content.components(separatedBy: .newlines)
         var inFrontmatter = false
         var frontmatterEndIndex: Int?
         var modelLineIndex: Int?
@@ -1063,7 +1063,8 @@ struct AgentConfigurationWidgetView: View {
                             Text(createModelMenuItemAttributedString(
                                 modelName: model.displayName ?? model.modelName,
                                 isSelected: isModelSelected(model),
-                                multiplierText: modelCache[model.modelName] ?? "Variable"
+                                multiplierText: modelCache[model.modelName] ?? "Variable",
+                                isDegraded: model.degradationReason != nil
                             ))
                         }
 
@@ -1078,7 +1079,8 @@ struct AgentConfigurationWidgetView: View {
                                     Text(createModelMenuItemAttributedString(
                                         modelName: model.displayName ?? model.modelName,
                                         isSelected: isModelSelected(model),
-                                        multiplierText: modelCache[model.modelName] ?? ""
+                                        multiplierText: modelCache[model.modelName] ?? "",
+                                        isDegraded: model.degradationReason != nil
                                     ))
                                 }
                             }
@@ -1173,13 +1175,15 @@ struct AgentConfigurationWidgetView: View {
         private func createModelMenuItemAttributedString(
             modelName: String,
             isSelected: Bool,
-            multiplierText: String
+            multiplierText: String,
+            isDegraded: Bool = false
         ) -> AttributedString {
             return ModelMenuItemFormatter.createModelMenuItemAttributedString(
                 modelName: modelName,
                 isSelected: isSelected,
                 multiplierText: multiplierText,
                 targetWidth: targetMenuItemWidth,
+                isDegraded: isDegraded
             )
         }
     }

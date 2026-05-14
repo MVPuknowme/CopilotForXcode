@@ -4,6 +4,7 @@ import Combine
 import Logger
 import AppKit
 import LanguageServerProtocol
+import NotificationCenterCoordinator
 import UserNotifications
 
 public protocol ShowMessageRequestHandler {
@@ -13,28 +14,10 @@ public protocol ShowMessageRequestHandler {
     )
 }
 
-public final class ShowMessageRequestHandlerImpl: NSObject, ShowMessageRequestHandler, UNUserNotificationCenterDelegate {
+public final class ShowMessageRequestHandlerImpl: ShowMessageRequestHandler {
     public static let shared = ShowMessageRequestHandlerImpl()
-    
-    private var isNotificationSetup = false
-    
-    private override init() {
-        super.init()
-    }
-    
-    @MainActor
-    private func setupNotificationCenterIfNeeded() async {
-        guard !isNotificationSetup else { return }
-        guard Bundle.main.bundleIdentifier != nil else {
-            // Skip notification setup in test environment
-            return
-        }
-        
-        isNotificationSetup = true
-        UNUserNotificationCenter.current().delegate = self
-        _ = try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .sound])
-    }
+
+    private init() {}
 
     public func handleShowMessageRequest(
         _ request: ShowMessageRequest,
@@ -43,8 +26,8 @@ public final class ShowMessageRequestHandlerImpl: NSObject, ShowMessageRequestHa
         guard let params = request.params else { return }
         Logger.gitHubCopilot.debug("Received Show Message Request: \(params)")
         Task { @MainActor in
-            await setupNotificationCenterIfNeeded()
-            
+            await NotificationCenterCoordinator.shared.setupIfNeeded()
+
             let actionCount = params.actions?.count ?? 0
             
             // Use notification for messages with no action, alert for messages with actions
@@ -102,17 +85,5 @@ public final class ShowMessageRequestHandlerImpl: NSObject, ShowMessageRequestHa
         }
         
         return actions[buttonIndex]
-    }
-    
-    // MARK: - UNUserNotificationCenterDelegate
-    
-    // This method is called when a notification is delivered while the app is in the foreground
-    public func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        // Show the notification banner even when app is in foreground
-        completionHandler([.banner, .list, .badge, .sound])
     }
 }

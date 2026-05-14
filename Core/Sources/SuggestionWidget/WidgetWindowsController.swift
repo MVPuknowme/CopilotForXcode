@@ -240,42 +240,24 @@ private extension WidgetWindowsController {
             let valueChange = await editor.axNotifications.notifications()
                 .filter { $0.kind == .valueChanged }
 
-            if #available(macOS 13.0, *) {
-                for await notification in merge(
-                    scroll,
-                    selectionRangeChange.debounce(for: Duration.milliseconds(0)),
-                    valueChange.debounce(for: Duration.milliseconds(100))
-                ) {
-                    guard await xcodeInspector.safe.latestActiveXcode != nil else { return }
-                    try Task.checkCancellation()
+            for await notification in merge(
+                scroll,
+                selectionRangeChange.debounce(for: Duration.milliseconds(0)),
+                valueChange.debounce(for: Duration.milliseconds(100))
+            ) {
+                guard await xcodeInspector.safe.latestActiveXcode != nil else { return }
+                try Task.checkCancellation()
 
-                    // for better looking
-                    if notification.kind == .scrollPositionChanged {
-                        await hideSuggestionPanelWindow()
-                    }
-
-                    updateWindowLocation(animated: false, immediately: false)
-                    updateWindowOpacity(immediately: false)
-                    await updateCodeReviewWindowLocation(.onSourceEditorNotification(notification))
-                    
-                    await handleFixErrorEditorNotification(notification: notification)
+                // for better looking
+                if notification.kind == .scrollPositionChanged {
+                    await hideSuggestionPanelWindow()
                 }
-            } else {
-                for await notification in merge(selectionRangeChange, scroll, valueChange) {
-                    guard await xcodeInspector.safe.latestActiveXcode != nil else { return }
-                    try Task.checkCancellation()
 
-                    // for better looking
-                    if notification.kind == .scrollPositionChanged {
-                        await hideSuggestionPanelWindow()
-                    }
+                updateWindowLocation(animated: false, immediately: false)
+                updateWindowOpacity(immediately: false)
+                await updateCodeReviewWindowLocation(.onSourceEditorNotification(notification))
 
-                    updateWindowLocation(animated: false, immediately: false)
-                    updateWindowOpacity(immediately: false)
-                    await updateCodeReviewWindowLocation(.onSourceEditorNotification(notification))
-                    
-                    await handleFixErrorEditorNotification(notification: notification)
-                }
+                await handleFixErrorEditorNotification(notification: notification)
             }
         }
     }
@@ -862,8 +844,8 @@ extension WidgetWindowsController {
         guard state.isPanelDisplayed,
               let comment = state.currentSelectedComment,
               await currentXcodeApp?.realtimeDocumentURL?.absoluteString == comment.uri,
-              let reviewWindowFittingSize = windows.codeReviewPanelWindow.contentView?.fittingSize
-        else { 
+              windows.codeReviewPanelWindow.contentView?.fittingSize != nil
+        else {
             hideCodeReviewWindow()
             return
         }
@@ -871,7 +853,7 @@ extension WidgetWindowsController {
         guard let originalContent = state.originalContent, 
               let screen = NSScreen.screens.first(where: { $0.frame.origin == .zero }),
               let scrollViewRect = sourceEditorElement.parent?.rect,
-              let scrollScreenFrame = sourceEditorElement.parent?.maxIntersectionScreen?.frame,
+              sourceEditorElement.parent?.maxIntersectionScreen?.frame != nil,
               let currentContent: String = try? sourceEditorElement.copyValue(key: kAXValueAttribute)
         else { return }
         

@@ -466,27 +466,11 @@ class AgentModeButtonMenuItem: NSView {
         super.draw(dirtyRect)
 
         if isHovered {
-            NSGraphicsContext.saveGraphicsState()
-
-            let hoverColor = NSColor(.accentColor)
-            hoverColor.setFill()
-
-            let cornerRadius: CGFloat
-            if #available(macOS 26.0, *) {
-                cornerRadius = 8.0 * fontScale
-            } else {
-                cornerRadius = 4.0 * fontScale
-            }
-
-            // Use frame dimensions instead of bounds to avoid layout recursion
-            let viewWidth = frame.width
-            let viewHeight = frame.height
-            let hoverWidth = viewWidth - (scaledConstants.hoverEdgeInset * 2)
-            let insetRect = NSRect(x: scaledConstants.hoverEdgeInset, y: 0, width: hoverWidth, height: viewHeight)
-            let path = NSBezierPath(roundedRect: insetRect, xRadius: cornerRadius, yRadius: cornerRadius)
-            path.fill()
-
-            NSGraphicsContext.restoreGraphicsState()
+            ModelMenuItemFormatter.drawMenuItemHighlight(
+                in: frame,
+                fontScale: fontScale,
+                hoverEdgeInset: scaledConstants.hoverEdgeInset
+            )
         }
     }
 

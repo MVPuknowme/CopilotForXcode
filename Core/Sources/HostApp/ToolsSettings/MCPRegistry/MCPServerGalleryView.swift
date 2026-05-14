@@ -287,38 +287,28 @@ struct MCPServerGalleryView: View {
                     .buttonStyle(DestructiveButtonStyle())
                     .help("Uninstall")
                 } else {
-                    if #available(macOS 13.0, *) {
-                        SplitButton(
-                            title: "Install",
-                            isDisabled: viewModel.hasNoDeployments(response.server),
-                            primaryAction: {
-                                // Install with default configuration
-                                Task {
-                                    await viewModel.installServer(response.server)
-                                }
-                            },
-                            menuItems: {
-                                let options = viewModel.getInstallationOptions(for: response.server)
-                                guard !options.isEmpty else { return [] }
-                                return [SplitButtonMenuItem.header("Install Server With")] + options.map { option in
-                                    SplitButtonMenuItem(title: option.displayName) {
-                                        Task {
-                                            await viewModel.installServer(response.server, configuration: option.displayName)
-                                        }
-                                    }
-                                }
-                            }()
-                        )
-                        .help("Install")
-                    } else {
-                        Button("Install") {
+                    SplitButton(
+                        title: "Install",
+                        isDisabled: viewModel.hasNoDeployments(response.server),
+                        primaryAction: {
+                            // Install with default configuration
                             Task {
                                 await viewModel.installServer(response.server)
                             }
-                        }
-                        .disabled(viewModel.hasNoDeployments(response.server))
-                        .help("Install")
-                    }
+                        },
+                        menuItems: {
+                            let options = viewModel.getInstallationOptions(for: response.server)
+                            guard !options.isEmpty else { return [] }
+                            return [SplitButtonMenuItem.header("Install Server With")] + options.map { option in
+                                SplitButtonMenuItem(title: option.displayName) {
+                                    Task {
+                                        await viewModel.installServer(response.server, configuration: option.displayName)
+                                    }
+                                }
+                            }
+                        }()
+                    )
+                    .help("Install")
                 }
 
                 Button {
@@ -340,11 +330,7 @@ struct MCPServerGalleryView: View {
     }
 
     private func infoSheet(_ response: MCPRegistryServerResponse) -> some View {
-        if #available(macOS 13.0, *) {
-            return AnyView(MCPServerDetailSheet(response: response))
-        } else {
-            return AnyView(EmptyView())
-        }
+        MCPServerDetailSheet(response: response)
     }
 }
 

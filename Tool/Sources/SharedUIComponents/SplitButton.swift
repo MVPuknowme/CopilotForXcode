@@ -35,7 +35,6 @@ public struct SplitButtonMenuItem: Identifiable {
     }
 }
 
-@available(macOS 13.0, *)
 private enum SplitButtonMenuBuilder {
     static func buildMenu(
         items: [SplitButtonMenuItem],
@@ -87,7 +86,6 @@ private enum SplitButtonMenuBuilder {
 
 // MARK: - SplitButton using NSComboButton
 
-@available(macOS 13.0, *)
 public struct SplitButton: View {
     let title: String
     let primaryAction: () -> Void
@@ -155,7 +153,6 @@ public struct SplitButton: View {
     }
 }
 
-@available(macOS 13.0, *)
 private struct ProminentMenuButton: NSViewRepresentable {
     let menuItems: [SplitButtonMenuItem]
     let isDisabled: Bool
@@ -215,7 +212,6 @@ private struct ProminentMenuButton: NSViewRepresentable {
     }
 }
 
-@available(macOS 13.0, *)
 struct SplitButtonRepresentable: NSViewRepresentable {
     let title: String
     let primaryAction: () -> Void

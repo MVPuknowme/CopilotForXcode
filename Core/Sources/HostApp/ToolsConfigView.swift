@@ -23,7 +23,7 @@ struct MCPConfigView: View {
     @Environment(\.colorScheme) var colorScheme
 
     private var isCustomAgentEnabled: Bool {
-        featureFlags.isEditorPreviewEnabled && copilotPolicy.isCustomAgentEnabled
+        copilotPolicy.isCustomAgentEnabled
     }
 
     private static var lastSyncTimestamp: Date? = nil
@@ -63,6 +63,8 @@ struct MCPConfigView: View {
                                 if featureFlags.isEditorPreviewEnabled {
                                     MCPRegistryURLView()
                                 }
+
+                                MCPXcodeServerInstallView()
 
                                 MCPToolsListView(
                                     selectedMode: $selectedMode,

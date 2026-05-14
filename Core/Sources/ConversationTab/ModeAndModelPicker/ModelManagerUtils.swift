@@ -34,7 +34,8 @@ public extension AppState {
         let displayName = savedModel["displayName"]?.stringValue
         let providerName = savedModel["providerName"]?.stringValue
         let supportVision = savedModel["supportVision"]?.boolValue ?? false
-        
+        let degradationReason = savedModel["degradationReason"]?.stringValue
+
         // Try to reconstruct billing info if available
         var billing: CopilotModelBilling?
         if let isPremium = savedModel["billing"]?["isPremium"]?.boolValue,
@@ -44,7 +45,7 @@ public extension AppState {
                 multiplier: Float(multiplier)
             )
         }
-        
+
         return LLMModel(
             displayName: displayName,
             modelName: modelName,
@@ -52,7 +53,8 @@ public extension AppState {
             id: id,
             billing: billing,
             providerName: providerName,
-            supportVision: supportVision
+            supportVision: supportVision,
+            degradationReason: degradationReason
         )
     }
 
@@ -154,7 +156,8 @@ public class CopilotModelManagerObservable: ObservableObject {
                             modelFamily: fallbackModel.modelFamily,
                             id: fallbackModel.id,
                             billing: fallbackModel.billing,
-                            supportVision: fallbackModel.capabilities.supports.vision
+                            supportVision: fallbackModel.capabilities.supports.vision,
+                            degradationReason: fallbackModel.degradationReason
                         )
                     )
                 }
@@ -175,7 +178,8 @@ public extension CopilotModelManager {
                 modelFamily: $0.isChatFallback ? $0.id : $0.modelFamily,
                 id: $0.id,
                 billing: $0.billing,
-                supportVision: $0.capabilities.supports.vision
+                supportVision: $0.capabilities.supports.vision,
+                degradationReason: $0.degradationReason
             )
         }
     }
@@ -183,7 +187,8 @@ public extension CopilotModelManager {
     static func getDefaultChatModel(scope: PromptTemplateScope = .chatPanel) -> LLMModel? {
         let LLMs = CopilotModelManager.getAvailableLLMs()
         let LLMsInScope = LLMs.filter({ $0.scopes.contains(scope) })
-        let defaultModel = LLMsInScope.first(where: { $0.isChatDefault && !$0.isAutoModel })
+        let defaultModel = LLMsInScope.first(where: { $0.isChatDefault && $0.isAutoModel })
+            ?? LLMsInScope.first(where: { $0.isChatDefault })
         // If a default model is found, return it
         if let defaultModel = defaultModel {
             return LLMModel(
@@ -191,7 +196,8 @@ public extension CopilotModelManager {
                 modelFamily: defaultModel.modelFamily,
                 id: defaultModel.id,
                 billing: defaultModel.billing,
-                supportVision: defaultModel.capabilities.supports.vision
+                supportVision: defaultModel.capabilities.supports.vision,
+                degradationReason: defaultModel.degradationReason
             )
         }
 
@@ -203,18 +209,20 @@ public extension CopilotModelManager {
                 modelFamily: gpt4_1.modelFamily,
                 id: gpt4_1.id,
                 billing: gpt4_1.billing,
-                supportVision: gpt4_1.capabilities.supports.vision
+                supportVision: gpt4_1.capabilities.supports.vision,
+                degradationReason: gpt4_1.degradationReason
             )
         }
 
         // If no default model is found, fallback to the first available model
-        if let firstModel = LLMsInScope.first(where: { !$0.isAutoModel }) {
+        if let firstModel = LLMsInScope.first {
             return LLMModel(
                 modelName: firstModel.modelName,
                 modelFamily: firstModel.modelFamily,
                 id: firstModel.id,
                 billing: firstModel.billing,
-                supportVision: firstModel.capabilities.supports.vision
+                supportVision: firstModel.capabilities.supports.vision,
+                degradationReason: firstModel.degradationReason
             )
         }
 
@@ -253,6 +261,7 @@ public struct LLMModel: Codable, Hashable, Equatable {
     public let billing: CopilotModelBilling?
     public let providerName: String?
     public let supportVision: Bool
+    public let degradationReason: String?
     
     public init(
         displayName: String? = nil,
@@ -261,7 +270,8 @@ public struct LLMModel: Codable, Hashable, Equatable {
         id: String,
         billing: CopilotModelBilling?,
         providerName: String? = nil,
-        supportVision: Bool
+        supportVision: Bool,
+        degradationReason: String? = nil
     ) {
         self.displayName = displayName
         self.modelName = modelName
@@ -270,6 +280,28 @@ public struct LLMModel: Codable, Hashable, Equatable {
         self.billing = billing
         self.providerName = providerName
         self.supportVision = supportVision
+        self.degradationReason = degradationReason
+    }
+
+    // Exclude degradationReason from equality — it's transient status, not model identity
+    public static func == (lhs: LLMModel, rhs: LLMModel) -> Bool {
+        lhs.displayName == rhs.displayName &&
+            lhs.modelName == rhs.modelName &&
+            lhs.modelFamily == rhs.modelFamily &&
+            lhs.id == rhs.id &&
+            lhs.billing == rhs.billing &&
+            lhs.providerName == rhs.providerName &&
+            lhs.supportVision == rhs.supportVision
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(displayName)
+        hasher.combine(modelName)
+        hasher.combine(modelFamily)
+        hasher.combine(id)
+        hasher.combine(billing)
+        hasher.combine(providerName)
+        hasher.combine(supportVision)
     }
 }
 

@@ -336,6 +336,10 @@ public extension UserDefaultPreferenceKeys {
     var enableSubagent: PreferenceKey<Bool> {
         .init(defaultValue: true, key: "EnableSubagent")
     }
+
+    var autoCompress: PreferenceKey<Bool> {
+        .init(defaultValue: true, key: "AutoCompress")
+    }
 }
 
 // MARK: - Theme

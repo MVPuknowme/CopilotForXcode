@@ -262,7 +262,7 @@ extension TabToAcceptSuggestion {
             return (false, "No filespace", nil)
         }
         
-        var codeSuggestionType: CodeSuggestionType? = {
+        let codeSuggestionType: CodeSuggestionType? = {
             if let _ = filespace.presentingSuggestion { return .codeCompletion }
             if let _ = filespace.presentingNESSuggestion { return .nes }
             return nil

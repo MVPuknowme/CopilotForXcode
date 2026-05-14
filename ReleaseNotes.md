@@ -1,18 +1,17 @@
-### GitHub Copilot for Xcode 0.47.0
+### GitHub Copilot for Xcode 0.48.0
 
 **🚀 Highlights**
 
-- **Toolcall Auto Approval**: Streamlined workflow with auto-approval support for MCP tools, sensitive files, and terminal commands.
-- **MCP Registry**: The MCP registry and allowlist features are now available (requires editor preview feature flag).
+- **Context Window and Auto Compress**: Track context token usage directly from the chat input and automatically compact conversation history to save tokens.
+- **Xcode MCP Server Setup**: Install and connect Xcode's built-in MCP server directly from settings.
+- **General Availability**: Custom agents and the Auto model are now generally available.
 
-**💪 Improvements**
+**💪 Changes**
 
-- Refined the working set header.
-- Improved the details view for MCP tool calls.
+- Removed support for macOS 12.
+- Improved UI for model picker tooltips.
 
 **🛠️ Bug Fixes**
 
-- Fixed layout issues with tool calls.
-- Resolved display issues for Next Edit Suggestions (NES).
-- Improved error messaging for SSL certificate failures.
-- Addressed various performance issues.
+- Fixed an issue where GPT-5.4 requests could return a 400 error.
+- Fixed an issue where the MCP allowlist did not work correctly.

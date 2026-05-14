@@ -20,6 +20,7 @@ public protocol ConversationServiceType {
         workspace: WorkspaceInfo,
         changes: [ReviewChangesParams.Change]
     ) async throws -> CodeReviewResult?
+    func generateThinkingTitle(workspace: WorkspaceInfo, params: GenerateThinkingTitleParams) async throws -> GenerateThinkingTitleResponse?
 }
 
 public protocol ConversationServiceProvider {
@@ -36,6 +37,7 @@ public protocol ConversationServiceProvider {
     func agents() async throws -> [ChatAgent]?
     func notifyChangeTextDocument(fileURL: URL, content: String, version: Int, workspaceURL: URL?) async throws
     func reviewChanges(_ changes: [ReviewChangesParams.Change]) async throws -> CodeReviewResult?
+    func generateThinkingTitle(_ params: GenerateThinkingTitleParams) async throws -> GenerateThinkingTitleResponse?
 }
 
 public struct ConversationFileReference: Hashable, Codable, Equatable {
@@ -449,6 +451,146 @@ public struct ConversationProgressStep: Codable, Equatable, Identifiable {
         self.status = status
         self.error = error
     }
+}
+
+public struct Thinking: Codable, Equatable {
+    public let id: String
+    public let text: [String]?
+    public let encrypted: String?
+
+    public init(id: String, text: [String]?, encrypted: String?) {
+        self.id = id
+        self.text = text
+        self.encrypted = encrypted
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        encrypted = try container.decodeIfPresent(String.self, forKey: .encrypted)
+        text = try container.decodeStringOrArray(forKey: .text)
+    }
+}
+
+/// Internal, message-level thinking state.
+///
+/// Distinct from the wire/server `Thinking` payload above: that type carries deltas
+/// streamed from the LSP, while `MessageThinking` is the accumulated UI state stored on
+/// a `ChatMessage` (or `AgentRound`) and persisted across sessions. `isComplete` is a
+/// UI/state flag the server never sends — it's set when a thinking block ends.
+public struct MessageThinking: Codable, Equatable {
+    /// Stable client-generated key for this entry. Survives server delta `id` churn (e.g.
+    /// CodeX models emit a new `id` per delta) and is what the seal/title-attach code paths
+    /// look up. Persisted; older saved messages without it get a fresh UUID on decode.
+    public var clientEntryId: UUID
+    public var id: String
+    public var text: [String]?
+    public var encrypted: String?
+    public var title: String?
+    public var isComplete: Bool
+
+    public init(
+        clientEntryId: UUID = UUID(),
+        id: String,
+        text: [String]?,
+        encrypted: String?,
+        title: String? = nil,
+        isComplete: Bool = false
+    ) {
+        self.clientEntryId = clientEntryId
+        self.id = id
+        self.text = text
+        self.encrypted = encrypted
+        self.title = title
+        self.isComplete = isComplete
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        clientEntryId = try container.decodeIfPresent(UUID.self, forKey: .clientEntryId) ?? UUID()
+        id = try container.decode(String.self, forKey: .id)
+        encrypted = try container.decodeIfPresent(String.self, forKey: .encrypted)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        isComplete = try container.decodeIfPresent(Bool.self, forKey: .isComplete) ?? false
+        text = try container.decodeStringOrArray(forKey: .text)
+    }
+
+    public init(from server: Thinking, clientEntryId: UUID = UUID(), isComplete: Bool = false) {
+        self.clientEntryId = clientEntryId
+        self.id = server.id
+        self.text = server.text
+        self.encrypted = server.encrypted
+        self.title = nil
+        self.isComplete = isComplete
+    }
+
+    /// Parses thinking text into title-paired sections.
+    ///
+    /// Each "title-only" line (`**Title**` on its own) starts a new section. All lines that
+    /// follow up to the next title (or end of text) become that section's body. Lines before
+    /// any title go into a leading section with `title == nil`.
+    public static func parseSections(from raw: String) -> [ThinkingSection] {
+        if raw.isEmpty { return [] }
+        var sections: [ThinkingSection] = []
+        var currentTitle: String? = nil
+        var currentBody: [String] = []
+
+        func flush() {
+            let body = currentBody.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+            if currentTitle != nil || !body.isEmpty {
+                sections.append(ThinkingSection(title: currentTitle, body: body))
+            }
+        }
+
+        for line in raw.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("**"), trimmed.hasSuffix("**"), trimmed.count > 4 {
+                let inner = String(trimmed.dropFirst(2).dropLast(2))
+                if !inner.isEmpty, !inner.contains("*") {
+                    flush()
+                    currentTitle = inner
+                    currentBody = []
+                    continue
+                }
+            }
+            currentBody.append(line + "\n")
+        }
+        flush()
+        return sections
+    }
+}
+
+public struct ThinkingSection: Equatable {
+    public let title: String?
+    public let body: String
+
+    public init(title: String?, body: String) {
+        self.title = title
+        self.body = body
+    }
+}
+
+public extension KeyedDecodingContainer {
+    /// Decodes a value that the wire format may emit as either a single `String` or `[String]`,
+    /// normalizing to `[String]?`. Returns `nil` if the key is absent.
+    func decodeStringOrArray(forKey key: Key) throws -> [String]? {
+        if let single = try? decode(String.self, forKey: key) {
+            return [single]
+        }
+        return try decodeIfPresent([String].self, forKey: key)
+    }
+}
+
+public struct ContextSizeInfo: Codable, Equatable {
+    public let totalTokenLimit: Int
+    public let systemPromptTokens: Int
+    public let toolDefinitionTokens: Int
+    public let userMessagesTokens: Int
+    public let assistantMessagesTokens: Int
+    public let attachedFilesTokens: Int
+    public let toolResultsTokens: Int
+    public let totalUsedTokens: Int
+    public let utilizationPercentage: Double
 }
 
 public struct DidChangeWatchedFilesEvent: Codable {

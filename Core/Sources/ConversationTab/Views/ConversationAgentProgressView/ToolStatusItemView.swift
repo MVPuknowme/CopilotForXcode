@@ -510,15 +510,13 @@ private struct ToolStatusDetailsView<Title: View, Content: View>: View {
     @AppStorage(\.fontScale) var fontScale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 2) {
 
             Button(action: {
                 isExpanded.toggle()
             }) {
-                HStack(spacing: 8) {
+                HStack(spacing: 2) {
                     title
-
-                    Spacer()
 
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .resizable()
@@ -526,6 +524,8 @@ private struct ToolStatusDetailsView<Title: View, Content: View>: View {
                         .padding(4)
                         .scaledFrame(width: 16, height: 16)
                         .scaledFont(size: 10, weight: .medium)
+
+                    Spacer()
                 }
                 .contentShape(RoundedRectangle(cornerRadius: 6))
             }
@@ -534,9 +534,6 @@ private struct ToolStatusDetailsView<Title: View, Content: View>: View {
             .toolStatusStyle(withBackground: !isExpanded, fontScale: fontScale)
 
             if isExpanded {
-                Divider()
-                    .background(Color.agentToolStatusDividerColor)
-
                 content
                     .scaledPadding(.horizontal, 8)
             }
@@ -552,10 +549,6 @@ private extension View {
             if withBackground {
                 view
                     .scaledPadding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.agentToolStatusOutlineColor, lineWidth: 1 * fontScale)
-                    )
             } else {
                 view
             }
@@ -576,5 +569,66 @@ private extension View {
                         .stroke(Color.agentToolStatusOutlineColor, lineWidth: 1 * fontScale)
                 )
         }
+    }
+}
+
+// MARK: - Preview
+
+struct ToolStatusItemView_Preview: PreviewProvider {
+    static var previews: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Completed read file
+            ToolStatusItemView(tool: .init(
+                id: "1",
+                name: ServerToolName.readFile.rawValue,
+                progressMessage: "Read src/AppDelegate.swift",
+                status: .completed
+            ))
+            // Completed file search
+            ToolStatusItemView(tool: .init(
+                id: "2",
+                name: ServerToolName.findFiles.rawValue,
+                progressMessage: "Searched for files matching query: **/*.swift",
+                status: .completed,
+                resultDetails: [
+                    .fileLocation(.init(uri: "file:///src/App.swift", range: .init(start: .init(line: 0, character: 0), end: .init(line: 10, character: 0)))),
+                    .fileLocation(.init(uri: "file:///src/Model.swift", range: .init(start: .init(line: 0, character: 0), end: .init(line: 5, character: 0)))),
+                ]
+            ))
+            // Completed create file (expandable)
+            ToolStatusItemView(tool: .init(
+                id: "3",
+                name: ToolName.createFile.rawValue,
+                progressMessage: "Created src/NewFeature.swift",
+                status: .completed,
+                result: [.text("struct NewFeature {\n    var name: String\n}")]
+            ))
+            // Completed replace string (expandable)
+            ToolStatusItemView(tool: .init(
+                id: "4",
+                name: ServerToolName.replaceString.rawValue,
+                progressMessage: "Edited src/Config.swift",
+                status: .completed,
+                result: [.text("- let version = \"1.0\"\n+ let version = \"2.0\"")]
+            ))
+            // Running
+            ToolStatusItemView(tool: .init(
+                id: "5",
+                name: ServerToolName.codebase.rawValue,
+                progressMessage: "Searching codebase",
+                status: .running
+            ))
+            // Error
+            ToolStatusItemView(tool: .init(
+                id: "6",
+                name: ServerToolName.readFile.rawValue,
+                progressMessage: "Read missing_file.swift",
+                status: .error,
+                error: "File not found"
+            ))
+        }
+        .padding()
+        .frame(width: 400)
+        .colorScheme(.dark)
     }
 }

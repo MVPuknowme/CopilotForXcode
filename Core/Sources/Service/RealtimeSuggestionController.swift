@@ -88,16 +88,9 @@ public actor RealtimeSuggestionController {
                         )
                     }
 
-                    if #available(macOS 13.0, *) {
-                        for await _ in selectedTextChanged._throttle(for: .milliseconds(200)) {
-                            if Task.isCancelled { return }
-                            await handler()
-                        }
-                    } else {
-                        for await _ in selectedTextChanged {
-                            if Task.isCancelled { return }
-                            await handler()
-                        }
+                    for await _ in selectedTextChanged._throttle(for: .milliseconds(200)) {
+                        if Task.isCancelled { return }
+                        await handler()
                     }
                 }
 

@@ -161,8 +161,7 @@ struct RunInTerminalToolView: View {
                                 .scaledFont(.body)
                         }
 
-                        if #available(macOS 13.0, *),
-                           FeatureFlagNotifierImpl.shared.featureFlags.agentModeAutoApproval &&
+                        if FeatureFlagNotifierImpl.shared.featureFlags.agentModeAutoApproval &&
                            CopilotPolicyNotifierImpl.shared.copilotPolicy.agentModeAutoApprovalEnabled,
                            let command, !command.isEmpty {
                             SplitButton(
@@ -191,7 +190,6 @@ struct RunInTerminalToolView: View {
         }
     }
 
-    @available(macOS 13.0, *)
     private func terminalMenuItems(command: String) -> [SplitButtonMenuItem] {
         var items: [SplitButtonMenuItem] = []
 

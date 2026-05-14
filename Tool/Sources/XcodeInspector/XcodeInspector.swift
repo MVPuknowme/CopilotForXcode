@@ -326,15 +326,13 @@ public final class XcodeInspector: ObservableObject {
             .value(for: \.restartXcodeInspectorIfAccessibilityAPIIsMalfunctioning)
         {
             let malfunctionCheck = Task { @XcodeInspectorActor [weak self] in
-                if #available(macOS 13.0, *) {
-                    let notifications = await xcode.axNotifications.notifications().filter {
-                        $0.kind == .uiElementDestroyed
-                    }.debounce(for: .milliseconds(1000))
-                    for await _ in notifications {
-                        guard let self else { return }
-                        try Task.checkCancellation()
-                        self.checkForAccessibilityMalfunction("Element Destroyed")
-                    }
+                let notifications = await xcode.axNotifications.notifications().filter {
+                    $0.kind == .uiElementDestroyed
+                }.debounce(for: .milliseconds(1000))
+                for await _ in notifications {
+                    guard let self else { return }
+                    try Task.checkCancellation()
+                    self.checkForAccessibilityMalfunction("Element Destroyed")
                 }
             }
 

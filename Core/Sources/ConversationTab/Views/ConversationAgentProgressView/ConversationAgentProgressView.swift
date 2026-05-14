@@ -10,13 +10,25 @@ import SwiftUI
 struct ProgressAgentRound: View {
     let rounds: [AgentRound]
     let chat: StoreOf<Chat>
+    var isStreaming: Bool = false
 
     var body: some View {
         WithPerceptionTracking {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(rounds, id: \.roundId) { round in
+                ForEach(Array(rounds.enumerated()), id: \.element.roundId) { roundIndex, round in
+                    let isLastRound = roundIndex == rounds.count - 1
                     VStack(alignment: .leading, spacing: 8) {
-                        ThemedMarkdownText(text: round.reply, chat: chat)
+                        ForEach(Array(round.thinking.enumerated()), id: \.offset) { entryIndex, entry in
+                            ThinkingView(
+                                thinking: entry,
+                                isStreaming: isStreaming
+                                    && isLastRound
+                                    && entryIndex == round.thinking.count - 1
+                            )
+                        }
+                        if !round.reply.isEmpty {
+                            ThemedMarkdownText(text: round.reply, chat: chat)
+                        }
                         if let toolCalls = round.toolCalls, !toolCalls.isEmpty {
                             ProgressToolCalls(tools: toolCalls, chat: chat)
                         }
@@ -42,7 +54,12 @@ struct SubAgentRounds: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(rounds, id: \.roundId) { round in
                     VStack(alignment: .leading, spacing: 8) {
-                        ThemedMarkdownText(text: round.reply, chat: chat)
+                        ForEach(Array(round.thinking.enumerated()), id: \.offset) { _, entry in
+                            ThinkingView(thinking: entry, isStreaming: false)
+                        }
+                        if !round.reply.isEmpty {
+                            ThemedMarkdownText(text: round.reply, chat: chat)
+                        }
                         if let toolCalls = round.toolCalls, !toolCalls.isEmpty {
                             ProgressToolCalls(tools: toolCalls, chat: chat)
                         }
@@ -103,8 +120,7 @@ struct ToolConfirmationView: View {
 
     @ViewBuilder
     private var confirmationActionView: some View {
-        if #available(macOS 13.0, *),
-           FeatureFlagNotifierImpl.shared.featureFlags.agentModeAutoApproval &&
+        if FeatureFlagNotifierImpl.shared.featureFlags.agentModeAutoApproval &&
            CopilotPolicyNotifierImpl.shared.copilotPolicy.agentModeAutoApprovalEnabled {
             if tool.isToolcallingLoopContinueTool {
                 continueButton
@@ -150,7 +166,6 @@ struct ToolConfirmationView: View {
         .buttonStyle(.borderedProminent)
     }
 
-    @available(macOS 13.0, *)
     private var sensitiveFileMenuItems: [SplitButtonMenuItem] {
         var items: [SplitButtonMenuItem] = []
 
@@ -200,7 +215,6 @@ struct ToolConfirmationView: View {
         return items
     }
 
-    @available(macOS 13.0, *)
     private var sensitiveFileSplitButton: some View {
         SplitButton(
             title: "Allow",
@@ -213,7 +227,6 @@ struct ToolConfirmationView: View {
         )
     }
 
-    @available(macOS 13.0, *)
     private func mcpMenuItems(serverName: String) -> [SplitButtonMenuItem] {
         var items: [SplitButtonMenuItem] = []
 
@@ -288,7 +301,6 @@ struct ToolConfirmationView: View {
         return items
     }
 
-    @available(macOS 13.0, *)
     private func mcpSplitButton(serverName: String) -> some View {
         SplitButton(
             title: "Allow",
@@ -389,23 +401,56 @@ struct GenericToolTitleView: View {
 struct ProgressAgentRound_Preview: PreviewProvider {
     static let agentRounds: [AgentRound] = [
         .init(roundId: 1, reply: "this is agent step", toolCalls: [
+            // Completed read file
             .init(
                 id: "toolcall_001",
-                name: "Tool Call 1",
-                progressMessage: "Read Tool Call 1",
-                status: .completed,
-                error: nil),
+                name: ServerToolName.readFile.rawValue,
+                progressMessage: "Read src/AppDelegate.swift",
+                status: .completed),
+            // Completed file search with results
             .init(
                 id: "toolcall_002",
-                name: "Tool Call 2",
-                progressMessage: "Running Tool Call 2",
+                name: ServerToolName.findFiles.rawValue,
+                progressMessage: "Searched for files matching query: **/*.swift",
+                status: .completed,
+                resultDetails: [
+                    .fileLocation(.init(uri: "file:///src/App.swift", range: .init(start: .init(line: 0, character: 0), end: .init(line: 10, character: 0)))),
+                    .fileLocation(.init(uri: "file:///src/Model.swift", range: .init(start: .init(line: 0, character: 0), end: .init(line: 5, character: 0)))),
+                    .fileLocation(.init(uri: "file:///src/ViewModel.swift", range: .init(start: .init(line: 0, character: 0), end: .init(line: 8, character: 0)))),
+                ]),
+            // Completed create file (expandable)
+            .init(
+                id: "toolcall_003",
+                name: ToolName.createFile.rawValue,
+                progressMessage: "Created src/NewFeature.swift",
+                status: .completed,
+                result: [.text("```swift\nstruct NewFeature {\n    var name: String\n}\n```")]),
+            // Completed replace string (expandable)
+            .init(
+                id: "toolcall_004",
+                name: ServerToolName.replaceString.rawValue,
+                progressMessage: "Edited src/Config.swift",
+                status: .completed,
+                result: [.text("```diff\n- let version = \"1.0\"\n+ let version = \"2.0\"\n```")]),
+            // Running tool
+            .init(
+                id: "toolcall_005",
+                name: ServerToolName.codebase.rawValue,
+                progressMessage: "Searching codebase for references",
                 status: .running),
+            // Error tool
+            .init(
+                id: "toolcall_006",
+                name: ServerToolName.readFile.rawValue,
+                progressMessage: "Read missing_file.swift",
+                status: .error,
+                error: "File not found"),
         ]),
     ]
 
     static var previews: some View {
         let chatTabInfo = ChatTabInfo(id: "id", workspacePath: "path", username: "name")
         ProgressAgentRound(rounds: agentRounds, chat: .init(initialState: .init(), reducer: { Chat(service: ChatService.service(for: chatTabInfo)) }))
-            .frame(width: 300, height: 300)
+            .frame(width: 400, height: 500)
     }
 }

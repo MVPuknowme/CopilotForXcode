@@ -26,19 +26,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if #available(macOS 13.0, *) {
-            checkBackgroundPermissions()
-        }
-        
+        checkBackgroundPermissions()
+
         let launchMode = determineLaunchMode()
         handleLaunchMode(launchMode)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if #available(macOS 13.0, *) {
-            checkBackgroundPermissions()
-        }
-        
+        checkBackgroundPermissions()
+
         let launchMode = determineLaunchMode()
         handleLaunchMode(launchMode)
         return true
@@ -113,7 +109,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    @available(macOS 13.0, *)
     private func checkBackgroundPermissions() {
         Task {
             // Direct check of permission status
@@ -122,7 +117,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             if !isPermissionGranted {
                 // Only show alert if permission isn't granted
-                DispatchQueue.main.async {
+                await MainActor.run {
                     if !self.permissionAlertShown {
                         showBackgroundPermissionAlert()
                         self.permissionAlertShown = true
@@ -130,7 +125,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } else {
                 // Permission is granted, reset flag
-                self.permissionAlertShown = false
+                await MainActor.run {
+                    self.permissionAlertShown = false
+                }
             }
         }
     }
@@ -147,7 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Start cleanup in background without waiting
         Task {
-            let quitTask = Task {
+            _ = Task {
                 let service = try? getService()
                 try? await service?.quitService()
             }
@@ -272,10 +269,8 @@ func activateAndOpenSettings() {
     if #available(macOS 14.0, *) {
         let environment = SettingsEnvironment()
         environment.open()
-    } else if #available(macOS 13.0, *) {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     } else {
-        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 }
 

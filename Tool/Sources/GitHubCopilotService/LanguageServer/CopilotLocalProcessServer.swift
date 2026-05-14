@@ -225,6 +225,15 @@ class CopilotLocalProcessServer {
             case "policy/didChange":
                 notificationPublisher.send(anyNotification)
                 return true
+            case "$/copilot/compressionStarted":
+                notificationPublisher.send(anyNotification)
+                return true
+            case "$/copilot/compressionCompleted":
+                notificationPublisher.send(anyNotification)
+                return true
+            case "$/copilot/rateLimitWarning":
+                notificationPublisher.send(anyNotification)
+                return true
             case "conversation/preconditionsNotification", "statusNotification":
                 // Ignore
                 return true

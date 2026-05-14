@@ -7,12 +7,29 @@ public struct AgentRound: Codable, Equatable {
     public var reply: String
     public var toolCalls: [AgentToolCall]?
     public var subAgentRounds: [AgentRound]?
-    
-    public init(roundId: Int, reply: String, toolCalls: [AgentToolCall]? = [], subAgentRounds: [AgentRound]? = []) {
+    public var thinking: [MessageThinking]
+
+    public init(roundId: Int, reply: String, toolCalls: [AgentToolCall]? = [], subAgentRounds: [AgentRound]? = [], thinking: [MessageThinking] = []) {
         self.roundId = roundId
         self.reply = reply
         self.toolCalls = toolCalls
         self.subAgentRounds = subAgentRounds
+        self.thinking = thinking
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roundId = try container.decode(Int.self, forKey: .roundId)
+        reply = try container.decode(String.self, forKey: .reply)
+        toolCalls = try container.decodeIfPresent([AgentToolCall].self, forKey: .toolCalls)
+        subAgentRounds = try container.decodeIfPresent([AgentRound].self, forKey: .subAgentRounds)
+        if let array = try? container.decodeIfPresent([MessageThinking].self, forKey: .thinking) {
+            thinking = array
+        } else if let single = try? container.decodeIfPresent(MessageThinking.self, forKey: .thinking) {
+            thinking = [single]
+        } else {
+            thinking = []
+        }
     }
 }
 

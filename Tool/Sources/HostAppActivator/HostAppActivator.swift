@@ -45,17 +45,14 @@ public func launchHostAppSettings() throws {
         let activated = hostApp.activate(options: [.activateIgnoringOtherApps])
         Logger.ui.info("\(hostAppName()) activated: \(activated)")
 
-        let scriptSuccess = tryLaunchWithAppleScript()
-        
-        // If AppleScript fails, fall back to notification center
-        if !scriptSuccess {
-            DistributedNotificationCenter.default().postNotificationName(
-                .openSettingsWindowRequest,
-                object: nil
-            )
-            Logger.ui.info("\(hostAppName()) settings notification sent after activation")
-            return
-        }
+        _ = tryLaunchWithAppleScript()
+
+        DistributedNotificationCenter.default().postNotificationName(
+            .openSettingsWindowRequest,
+            object: nil
+        )
+        Logger.ui.info("\(hostAppName()) settings notification sent after activation")
+        return
     } else {
         // If app is not running, launch it with the settings flag
         try launchHostAppWithArgs(args: ["--settings"])

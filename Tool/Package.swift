@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "Tool",
-    platforms: [.macOS(.v12)],
+    platforms: [.macOS(.v13)],
     products: [
         .library(name: "XPCShared", targets: ["XPCShared"]),
         .library(name: "Terminal", targets: ["Terminal"]),
@@ -66,7 +66,8 @@ let package = Package(
         .library(name: "StatusBarItemView", targets: ["StatusBarItemView"]),
         .library(name: "HostAppActivator", targets: ["HostAppActivator"]),
         .library(name: "AppKitExtension", targets: ["AppKitExtension"]),
-        .library(name: "GitHelper", targets: ["GitHelper"])
+        .library(name: "GitHelper", targets: ["GitHelper"]),
+        .library(name: "NotificationCenterCoordinator", targets: ["NotificationCenterCoordinator"])
     ],
     dependencies: [
         // TODO: Update LanguageClient some day.
@@ -189,6 +190,7 @@ let package = Package(
             dependencies: [
                 "SuggestionBasic",
                 "SuggestionProvider",
+                "TelemetryServiceProvider",
                 "Workspace",
                 .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
             ]
@@ -266,7 +268,8 @@ let package = Package(
             dependencies: [
                 "Logger",
                 "Status",
-                .product(name: "SQLite", package: "SQLite.Swift")
+                .product(name: "SQLite", package: "SQLite.Swift"),
+                .product(name: "JSONRPC", package: "JSONRPC")
             ]
         ),
 
@@ -304,6 +307,8 @@ let package = Package(
 
         // MARK: - GitHub Copilot
 
+        .target(name: "NotificationCenterCoordinator"),
+
         .target(
             name: "GitHubCopilotService",
             dependencies: [
@@ -320,6 +325,7 @@ let package = Package(
                 "Workspace",
                 "Persist",
                 "SuggestionProvider",
+                "NotificationCenterCoordinator",
                 .product(name: "LanguageServerProtocol", package: "LanguageServerProtocol"),
                 .product(name: "CopilotForXcodeKit", package: "CopilotForXcodeKit"),
             ]

@@ -23,7 +23,7 @@ extension WidgetWindowsController {
         let state = store.withState { $0.panelState.agentConfigurationWidgetState }
         guard let noFocus = noFocus,
               !noFocus,
-              let focusedEditor = state.focusedEditor
+              state.focusedEditor != nil
         else {
             hideAgentConfigurationWidgetWindow()
             return

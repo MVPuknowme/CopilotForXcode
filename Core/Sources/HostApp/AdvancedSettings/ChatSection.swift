@@ -36,30 +36,31 @@ struct ChatSection: View {
                     .padding(SettingsToggle.defaultPadding)
 
                 Divider()
+                
+            }
 
-                if featureFlags.isAgentModeEnabled && copilotPolicy.isCustomAgentEnabled {
-                    // Custom Agents - .github/agents/*.agent.md
-                    AgentFileSetting(promptType: .agent)
-                        .padding(SettingsToggle.defaultPadding)
+            if featureFlags.isAgentModeEnabled && copilotPolicy.isCustomAgentEnabled {
+                // Custom Agents - .github/agents/*.agent.md
+                AgentFileSetting(promptType: .agent)
+                    .padding(SettingsToggle.defaultPadding)
 
-                    Divider()
+                Divider()
 
-                    // SubAgent toggle
-                    SettingsToggle(
-                        title: "Enable Subagent",
-                        subtitle: "Allows Copilot Agent mode to call custom agents as subagent. Requires GitHub Copilot for Xcode restart to take effect.",
-                        isOn: Binding(
-                            get: { enableSubagent && copilotPolicy.isSubagentEnabled },
-                            set: { if copilotPolicy.isSubagentEnabled { enableSubagent = $0 } }
-                        ),
-                        badge: copilotPolicy.isSubagentEnabled 
-                            ? nil 
-                            : .disabledByPolicy(feature: "Subagents", isPlural: true)
-                    )
-                    .disabled(!copilotPolicy.isSubagentEnabled)
+                // SubAgent toggle
+                SettingsToggle(
+                    title: "Enable Subagent",
+                    subtitle: "Allows Copilot Agent mode to call custom agents as subagent. Requires GitHub Copilot for Xcode restart to take effect.",
+                    isOn: Binding(
+                        get: { enableSubagent && copilotPolicy.isSubagentEnabled },
+                        set: { if copilotPolicy.isSubagentEnabled { enableSubagent = $0 } }
+                    ),
+                    badge: copilotPolicy.isSubagentEnabled 
+                        ? nil 
+                        : .disabledByPolicy(feature: "Subagents", isPlural: true)
+                )
+                .disabled(!copilotPolicy.isSubagentEnabled)
 
-                    Divider()
-                }
+                Divider()
             }
             
             // Auto Attach toggle
@@ -88,13 +89,18 @@ struct ChatSection: View {
             FontSizeSetting()
                 .padding(SettingsToggle.defaultPadding)
             
+            Divider()
+            
             if featureFlags.isAgentModeEnabled {
-                Divider()
-                
                 // Agent Max Tool Calling Requests
                 AgentMaxToolCallLoopSetting()
                     .padding(SettingsToggle.defaultPadding)
+
+                Divider()
             }
+
+            // Auto Compress
+            AgentAutoCompressSetting()
         }
     }
 }
@@ -333,6 +339,26 @@ struct AgentMaxToolCallLoopSetting: View {
                 debounceTimer = nil
             }
         }
+    }
+}
+
+struct AgentAutoCompressSetting: View {
+    @AppStorage(\.autoCompress) var autoCompress
+
+    var body: some View {
+        SettingsToggle(
+            title: "Auto Compress",
+            subtitle: "Automatically compact the conversation history to save contect tokens.",
+            isOn: Binding(
+                get: { autoCompress },
+                set: {
+                    autoCompress = $0
+                    DistributedNotificationCenter
+                        .default()
+                        .post(name: .githubCopilotAgentAutoCompressDidChange, object: nil)
+                }
+            )
+        )
     }
 }
 

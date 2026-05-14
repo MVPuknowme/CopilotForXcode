@@ -23,6 +23,7 @@ private let r: Double = 4
 public struct ChatPanel: View {
     @Perception.Bindable var chat: StoreOf<Chat>
     @Namespace var inputAreaNamespace
+    @ObservedObject private var rateLimitNotifier = RateLimitNotifierImpl.shared
 
     public var body: some View {
         WithPerceptionTracking {
@@ -55,12 +56,20 @@ public struct ChatPanel: View {
                     }
                 }
                 
+                if let warning = rateLimitNotifier.currentWarning {
+                    RateLimitWarningBanner(message: warning.message) {
+                        rateLimitNotifier.dismissWarning()
+                    }
+                    .scaledPadding(.horizontal, 24)
+                    .scaledPadding(.vertical, 8)
+                }
+
                 if chat.fileEditMap.count > 0 {
                     WorkingSetView(chat: chat)
                         .dimWithExitEditMode(chat)
                         .scaledPadding(.horizontal, 24)
                 }
-                
+
                 ChatPanelInputArea(chat: chat, r: r, editorMode: .input)
                     .dimWithExitEditMode(chat)
                     .scaledPadding(.horizontal, 16)
@@ -135,6 +144,36 @@ private struct ListHeightPreferenceKey: PreferenceKey {
     }
 }
 
+private struct ScrollViewConfigurator: NSViewRepresentable {
+    let configure: (NSScrollView) -> Void
+
+    final class Coordinator {
+        var didConfigure = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        applyOnce(view: view, coordinator: context.coordinator)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        applyOnce(view: nsView, coordinator: context.coordinator)
+    }
+
+    private func applyOnce(view: NSView, coordinator: Coordinator) {
+        guard !coordinator.didConfigure else { return }
+        DispatchQueue.main.async {
+            guard !coordinator.didConfigure,
+                  let scrollView = view.enclosingScrollView else { return }
+            coordinator.didConfigure = true
+            configure(scrollView)
+        }
+    }
+}
+
 struct ChatPanelMessages: View {
     let chat: StoreOf<Chat>
     @State var cancellable = Set<AnyCancellable>()
@@ -154,17 +193,34 @@ struct ChatPanelMessages: View {
         WithPerceptionTracking {
             ScrollViewReader { proxy in
                 GeometryReader { listGeo in
-                    List {
-                        Group {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        // VStack with a flexible trailing Spacer absorbs empty space when
+                        // content is shorter than the viewport, so content stays naturally
+                        // top-aligned. When content grows past the viewport, the Spacer
+                        // collapses to its minLength and the VStack overflows the
+                        // ScrollView's content area as expected. This avoids the List's
+                        // remembered-bottom-anchor behavior that pushed earlier content up
+                        // whenever a child view's height changed.
+                        VStack(alignment: .leading, spacing: 0) {
+                            ScrollViewConfigurator { scrollView in
+                                scrollView.scrollerStyle = .overlay
+                                scrollView.verticalScroller?.scrollerStyle = .overlay
+                                scrollView.autohidesScrollers = true
+                            }
+                            .frame(width: 0, height: 0)
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id(topID)
 
                             ChatHistory(chat: chat)
                                 .fixedSize(horizontal: false, vertical: true)
 
                             ExtraSpacingInResponding(chat: chat)
 
-                            Spacer(minLength: 12)
+                            Color.clear
+                                .frame(height: 12)
                                 .id(bottomID)
-                                .listRowInsets(EdgeInsets())
                                 .onAppear {
                                     isBottomHidden = false
                                     if !didScrollToBottomOnAppearOnce {
@@ -182,25 +238,16 @@ struct ChatPanelMessages: View {
                                         value: offset
                                     )
                                 })
+
+                            Spacer(minLength: 0)
                         }
-                        .modify { view in
-                            if #available(macOS 13.0, *) {
-                                view
-                                    .listRowSeparator(.hidden)
-                            } else {
-                                view
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scaledPadding(.leading, 8)
-                    .listRowBackground(EmptyView())
-                    .modify { view in
-                        if #available(macOS 13.0, *) {
-                            view.scrollContentBackground(.hidden)
-                        } else {
-                            view
-                        }
+                        .frame(
+                            minWidth: 0,
+                            maxWidth: .infinity,
+                            minHeight: listGeo.size.height,
+                            alignment: .topLeading
+                        )
+                        .scaledPadding(.horizontal, 16)
                     }
                     .coordinateSpace(name: scrollSpace)
                     .preference(

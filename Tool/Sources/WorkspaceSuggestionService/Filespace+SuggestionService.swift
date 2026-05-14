@@ -153,7 +153,7 @@ public extension Filespace {
     ///   - Returns: `true` if the nes suggestion is still valid
     @WorkspaceActor
     func validateNESSuggestions(lines: [String], cursorPosition: CursorPosition) -> Bool {
-        guard let presentingNESSuggestion else { return false }
+        guard presentingNESSuggestion != nil else { return false }
         
         let updatedSnapshot = FilespaceSuggestionSnapshot(lines: lines, cursorPosition: cursorPosition)
         

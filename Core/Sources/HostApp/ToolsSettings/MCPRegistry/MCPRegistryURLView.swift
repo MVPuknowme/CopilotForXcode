@@ -14,7 +14,7 @@ struct MCPRegistryURLView: View {
     @State private var isLoading: Bool = false
     @State private var tempURLText: String = ""
     @State private var errorMessage: String = ""
-    @State private var mcpRegistry: [MCPRegistryEntry]? = nil
+    @ObservedObject private var registryService = MCPRegistryService.shared
 
     private let maxURLLength = 2048
     private let mcpRegistryUrlVersion = "/v0.1/servers"
@@ -48,7 +48,7 @@ struct MCPRegistryURLView: View {
                             }
                             .buttonStyle(.bordered)
                             .help("Configure your MCP Registry Base URL")
-                            .disabled(mcpRegistry?.first?.registryAccess == .registryOnly)
+                            .disabled(registryService.mcpRegistryEntries?.first?.registryAccess == .registryOnly)
                             
                             Button { Task{ await loadMCPServers() } } label: {
                                 HStack(spacing: 0) {
@@ -74,7 +74,7 @@ struct MCPRegistryURLView: View {
                             urlText: $tempURLText,
                             maxURLLength: maxURLLength,
                             isSheet: false,
-                            mcpRegistryEntry: mcpRegistry?.first,
+                            mcpRegistryEntry: registryService.mcpRegistryEntries?.first,
                             onValidationChange: { _ in
                                 // Only validate, don't update mcpRegistryURL here
                             },
@@ -115,7 +115,7 @@ struct MCPRegistryURLView: View {
                 tempURLText = newValue
                 Task { await updateGalleryWindowIfOpen() }
             }
-            .onChange(of: mcpRegistry) { _ in
+            .onChange(of: registryService.mcpRegistryEntries) { _ in
                 Task { await updateGalleryWindowIfOpen() }
             }
         }
@@ -145,7 +145,7 @@ struct MCPRegistryURLView: View {
             mcpRegistryBaseURLHistory.addToHistory(mcpRegistryBaseURL)
             errorMessage = ""
             
-            MCPServerGalleryWindow.open(serverList: serverList, mcpRegistryEntry: mcpRegistry?.first)
+            MCPServerGalleryWindow.open(serverList: serverList, mcpRegistryEntry: registryService.mcpRegistryEntries?.first)
         } catch {
             Logger.client.error("Failed to load MCP servers from registry: \(error.localizedDescription)")
             if let serviceError = error as? XPCExtensionServiceError {
@@ -160,44 +160,14 @@ struct MCPRegistryURLView: View {
     private func getMCPRegistryAllowlist() async {
         isLoading = true
         defer { isLoading = false }
-        do {
-            let service = try getService()
-            
-            // Only fetch allowlist if user is logged in
-            let authStatus = try await service.getXPCServiceAuthStatus()
-            guard authStatus?.status == .loggedIn else {
-                Logger.client.info("User not logged in, skipping MCP registry allowlist fetch")
-                return
-            }
-            
-            let result = try await service.getMCPRegistryAllowlist()
-            
-            guard let result = result, !result.mcpRegistries.isEmpty else {
-                if result == nil {
-                    Logger.client.error("Failed to get allowlist result")
-                } else {
-                    mcpRegistry = []
-                }
-                return
-            }
-            
-            if let firstRegistry = result.mcpRegistries.first {
-                let entry = MCPRegistryEntry(
-                    url: firstRegistry.url,
-                    registryAccess: firstRegistry.registryAccess,
-                    owner: firstRegistry.owner
-                )
-                mcpRegistry = [entry]
-                Logger.client.info("Current MCP Registry Entry: \(entry)")
-                
-                // If registryOnly, force the URL to be the registry URL
-                if entry.registryAccess == .registryOnly {
-                    mcpRegistryBaseURL = entry.url
-                    tempURLText = entry.url
-                }
-            }
-        } catch {
-            Logger.client.error("Failed to get MCP allowlist from registry: \(error)")
+
+        await registryService.refreshAllowlist()
+
+        // If registryOnly, force the URL to be the registry URL
+        if let entry = registryService.mcpRegistryEntries?.first,
+           entry.registryAccess == .registryOnly {
+            mcpRegistryBaseURL = entry.url
+            tempURLText = entry.url
         }
     }
     
@@ -211,7 +181,7 @@ struct MCPRegistryURLView: View {
         defer { isLoading = false }
         
         // Let the view model handle the entire update flow including clearing and fetching
-        if let error = await MCPServerGalleryWindow.refreshFromURL(mcpRegistryEntry: mcpRegistry?.first) {
+        if let error = await MCPServerGalleryWindow.refreshFromURL(mcpRegistryEntry: registryService.mcpRegistryEntries?.first) {
             // Display error in the URL view
             if let serviceError = error as? XPCExtensionServiceError {
                 errorMessage = serviceError.underlyingError?.localizedDescription ?? serviceError.localizedDescription

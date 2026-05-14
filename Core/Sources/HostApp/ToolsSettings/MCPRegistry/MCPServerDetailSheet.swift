@@ -4,7 +4,6 @@ import GitHubCopilotService
 import SharedUIComponents
 import Foundation
 
-@available(macOS 13.0, *)
 struct MCPServerDetailSheet: View {
     let server: MCPRegistryServerDetail
     let meta: ServerMeta?

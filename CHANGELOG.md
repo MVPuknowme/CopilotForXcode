@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.48.0 - April 23, 2026
+### Added
+- Context window usage details in chat, including a token breakdown for system instructions, messages, attached files, and tool results.
+- Auto Compress setting to compact conversation history and save context tokens.
+- Install flow for Xcode's built-in MCP server from settings.
+
+### Changed
+- Custom agents and the Auto model are now generally available.
+- Removed support for macOS 12.
+- Improved UI for model picker tooltips.
+
+### Fixed
+- Fixed an issue where GPT-5.4 requests could return a 400 error.
+- Fixed an issue where the MCP allowlist did not work correctly.
+
 ## 0.47.0 - February 4, 2026
 ### Added
 - Auto approval for MCP tools, sensitive files, and terminal commands.

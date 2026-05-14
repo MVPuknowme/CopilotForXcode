@@ -108,6 +108,9 @@ public func editorConfiguration(includeMCP: Bool) -> JSONValue {
         let trustToolAnnotations = UserDefaults.shared.value(for: \.trustToolAnnotations)
         d["trustToolAnnotations"] = .bool(trustToolAnnotations)
 
+        let autoCompress = UserDefaults.shared.value(for: \.autoCompress)
+        d["autoCompress"] = .bool(autoCompress)
+
         let state = UserDefaults.autoApproval.value(for: \.sensitiveFilesGlobalApprovals)
         var autoApproveList: [JSONValue] = []
         for (key, rule) in state.rules {
@@ -715,6 +718,20 @@ enum GitHubCopilotRequest {
             return .custom("copilot/byok/listApiKeys", dict, ClientRequest.NullHandler)
         }
     }
+
+    // MARK: Thinking
+    struct GenerateThinkingTitle: GitHubCopilotRequestType {
+        typealias Response = GenerateThinkingTitleResponse
+
+        var params: GenerateThinkingTitleParams
+
+        var request: ClientRequest {
+            let data = (try? JSONEncoder().encode(params)) ?? Data()
+            let dict = (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .hash([:])
+            return .custom("thinking/generateTitle", dict, ClientRequest.NullHandler)
+        }
+    }
+
 }
 
 // MARK: Notifications
@@ -746,6 +763,36 @@ public enum GitHubCopilotNotification {
         public var message: String?
 
         public static func decode(fromParams params: JSONValue?) -> StatusNotification? {
+            try? JSONDecoder().decode(Self.self, from: (try? JSONEncoder().encode(params)) ?? Data())
+        }
+    }
+
+    public enum CompressionTrigger: String, Codable {
+        case preTurn = "pre-turn"
+        case postToolCall = "post-tool-call"
+        case manual = "manual"
+    }
+
+    public struct CompressionStartedNotification: Codable {
+        public var conversationId: String
+        public var partitionId: Int
+        public var reason: CompressionTrigger
+
+        public static func decode(fromParams params: JSONValue?) -> CompressionStartedNotification? {
+            try? JSONDecoder().decode(Self.self, from: (try? JSONEncoder().encode(params)) ?? Data())
+        }
+    }
+
+    public struct CompressionCompletedNotification: Codable {
+        public var conversationId: String
+        public var archivedPartitionId: Int
+        public var newPartitionId: Int
+        public var summaryLength: Int
+        public var turnCount: Int
+        public var durationMs: Int
+        public var contextInfo: ContextSizeInfo?
+
+        public static func decode(fromParams params: JSONValue?) -> CompressionCompletedNotification? {
             try? JSONDecoder().decode(Self.self, from: (try? JSONEncoder().encode(params)) ?? Data())
         }
     }

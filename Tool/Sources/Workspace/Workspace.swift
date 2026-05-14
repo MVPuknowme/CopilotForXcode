@@ -260,7 +260,6 @@ extension Workspace {
         
         // Handle empty old content (new file)
         if oldContent.isEmpty {
-            let endPosition = calculateEndPosition(content: oldContent)
             return [TextDocumentContentChangeEvent(
                 range: LSPRange(
                     start: Position(line: 0, character: 0),

@@ -24,6 +24,7 @@ public enum PromptTemplateScope: String, Codable, Equatable {
     case agentPanel = "agent-panel"
     case editor = "editor"
     case inline = "inline"
+    case inlineAgent = "inline-agent"
     case completion = "completion"
 }
 
@@ -46,6 +47,7 @@ public struct CopilotModel: Codable, Equatable {
     public let isChatFallback: Bool
     public let capabilities: CopilotModelCapabilities
     public let billing: CopilotModelBilling?
+    public let degradationReason: String?
 }
 
 public struct CopilotModelPolicy: Codable, Equatable {
@@ -76,6 +78,7 @@ public enum ChatMode: String, Codable {
     case Ask = "Ask"
     case Edit = "Edit"
     case Agent = "Agent"
+    case InlineAgent = "InlineAgent"
 }
 
 public struct ConversationMode: Codable, Equatable {
@@ -512,6 +515,20 @@ public struct ActionCommand: Codable, Equatable, Hashable {
 
 // MARK: - Copilot Code Review
 
+public struct GenerateThinkingTitleParams: Codable {
+    public var thinkingContent: String?
+    public var extractedTitles: [String]?
+
+    public init(thinkingContent: String? = nil, extractedTitles: [String]? = nil) {
+        self.thinkingContent = thinkingContent
+        self.extractedTitles = extractedTitles
+    }
+}
+
+public struct GenerateThinkingTitleResponse: Codable {
+    public var title: String
+}
+
 public struct ReviewChangesParams: Codable, Equatable {
     public struct Change: Codable, Equatable {
         public let uri: DocumentUri
@@ -539,8 +556,8 @@ public struct ReviewChangesParams: Codable, Equatable {
 }
 
 public struct ReviewComment: Codable, Equatable, Hashable {
-    // Self-defined `id` for using in comment operation. Add an init value to bypass decoding
-    public let id: String = UUID().uuidString
+    // Self-defined `id` for using in comment operation. Generated when missing from payload.
+    public let id: String
     public let uri: DocumentUri
     public let range: LSPRange
     public let message: String
@@ -549,7 +566,7 @@ public struct ReviewComment: Codable, Equatable, Hashable {
     // enum: low, medium, high
     public let severity: String
     public let suggestion: String?
-    
+
     public init(
         uri: DocumentUri,
         range: LSPRange,
@@ -558,12 +575,28 @@ public struct ReviewComment: Codable, Equatable, Hashable {
         severity: String,
         suggestion: String?
     ) {
+        self.id = UUID().uuidString
         self.uri = uri
         self.range = range
         self.message = message
         self.kind = kind
         self.severity = severity
         self.suggestion = suggestion
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, uri, range, message, kind, severity, suggestion
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.uri = try container.decode(DocumentUri.self, forKey: .uri)
+        self.range = try container.decode(LSPRange.self, forKey: .range)
+        self.message = try container.decode(String.self, forKey: .message)
+        self.kind = try container.decode(String.self, forKey: .kind)
+        self.severity = try container.decode(String.self, forKey: .severity)
+        self.suggestion = try container.decodeIfPresent(String.self, forKey: .suggestion)
     }
 }
 

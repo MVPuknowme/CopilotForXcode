@@ -48,7 +48,6 @@ class NESMenuController: ObservableObject {
         let settingsItem = createSettingItem()
         let goToAcceptItem = createGoToAcceptItem()
         let rejectItem = createRejectItem()
-        let moreInfoItem = createGetMoreInfoItem()
         
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
@@ -56,8 +55,6 @@ class NESMenuController: ObservableObject {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(goToAcceptItem)
         menu.addItem(rejectItem)
-//        menu.addItem(NSMenuItem.separator())
-//        menu.addItem(moreInfoItem)
         
         self.menu = menu
         return menu

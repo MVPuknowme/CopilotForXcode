@@ -26,8 +26,8 @@ You can receive auto-complete type suggestions from GitHub Copilot either by sta
 
 ## Requirements
 
-- macOS 12+
-- Xcode 8+
+- macOS 13+
+- Xcode 14+
 - A GitHub account
 
 ## Getting Started

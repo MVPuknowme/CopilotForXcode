@@ -22,14 +22,14 @@ public extension ChatMemory {
                 
                 if !message.editAgentRounds.isEmpty {
                     var parentRounds = parentMessage.editAgentRounds
-                    
+
                     if let lastParentRoundIndex = parentRounds.indices.last {
                         var existingSubRounds = parentRounds[lastParentRoundIndex].subAgentRounds ?? []
-                        
+
                         for messageRound in message.editAgentRounds {
                             if let subIndex = existingSubRounds.firstIndex(where: { $0.roundId == messageRound.roundId }) {
                                 existingSubRounds[subIndex].reply = existingSubRounds[subIndex].reply + messageRound.reply
-                                
+                                mergeThinking(into: &existingSubRounds[subIndex].thinking, from: messageRound.thinking)
                                 if let messageToolCalls = messageRound.toolCalls, !messageToolCalls.isEmpty {
                                     var mergedToolCalls = existingSubRounds[subIndex].toolCalls ?? []
                                     for newToolCall in messageToolCalls {
@@ -77,7 +77,7 @@ public extension ChatMemory {
                         parentMessage.editAgentRounds = parentRounds
                     }
                 }
-                
+
                 history[parentIndex] = parentMessage
             } else if let index = history.firstIndex(where: { $0.id == message.id }) {
                 history[index].mergeMessage(with: message)
@@ -137,15 +137,17 @@ extension ChatMessage {
             
             self.steps = mergedSteps
         }
-        
+
         if !message.editAgentRounds.isEmpty {
             let mergedAgentRounds = mergeEditAgentRounds(
-                oldRounds: self.editAgentRounds, 
+                oldRounds: self.editAgentRounds,
                 newRounds: message.editAgentRounds
             )
-            
+
             self.editAgentRounds = mergedAgentRounds
         }
+
+        mergeThinking(into: &self.thinking, from: message.thinking)
         
         self.parentTurnId = message.parentTurnId ?? self.parentTurnId
         
@@ -166,7 +168,9 @@ extension ChatMessage {
         for newRound in newRounds {
             if let index = mergedAgentRounds.firstIndex(where: { $0.roundId == newRound.roundId }) {
                 mergedAgentRounds[index].reply = mergedAgentRounds[index].reply + newRound.reply
-                
+
+                mergeThinking(into: &mergedAgentRounds[index].thinking, from: newRound.thinking)
+
                 if newRound.toolCalls != nil, !newRound.toolCalls!.isEmpty {
                     var mergedToolCalls = mergedAgentRounds[index].toolCalls ?? []
                     for newToolCall in newRound.toolCalls! {
@@ -264,5 +268,36 @@ extension ChatMessage {
         }
         
         return edits
+    }
+}
+
+/// Merges incoming thinking deltas into an accumulated thinking array. Deltas are matched by
+/// `clientEntryId` (a stable client-generated key), so server delta `id` churn does not split a
+ /// streaming block. New entries (different `clientEntryId`) append; for the same entry, text
+ /// concatenates, `id` is replaced with the latest server value, `encrypted` and `title` keep
+ /// their existing values when the incoming delta omits them, and `isComplete` remains `true`
+ /// once any delta marks it complete.
+internal func mergeThinking(into accumulator: inout [MessageThinking], from incoming: [MessageThinking]) {
+    for newThinking in incoming {
+        let hasNewText = !(newThinking.text?.allSatisfy { $0.isEmpty } ?? true)
+        let hasNewTitle = newThinking.title != nil
+
+        if let index = accumulator.firstIndex(where: { $0.clientEntryId == newThinking.clientEntryId }) {
+            let existing = accumulator[index]
+            var mergedText = existing.text ?? []
+            if let new = newThinking.text {
+                mergedText.append(contentsOf: new)
+            }
+            accumulator[index] = MessageThinking(
+                clientEntryId: existing.clientEntryId,
+                id: newThinking.id,
+                text: mergedText.isEmpty ? nil : mergedText,
+                encrypted: newThinking.encrypted ?? existing.encrypted,
+                title: newThinking.title ?? existing.title,
+                isComplete: newThinking.isComplete || existing.isComplete
+            )
+        } else if hasNewText || hasNewTitle {
+            accumulator.append(newThinking)
+        }
     }
 }
