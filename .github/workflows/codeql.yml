@@ -55,19 +55,21 @@ jobs:
     - if: matrix.build-mode == 'manual'
       uses: ./.github/actions/set-xcode-version
 
-    - if: matrix.build-mode == 'manual'
+    - name: Build Swift project for CodeQL extraction
+      if: matrix.build-mode == 'manual'
       shell: bash
       run: |
+        set -euo pipefail
         xcodebuild \
+          -workspace 'Copilot for Xcode.xcworkspace' \
           -scheme 'Copilot for Xcode' \
-          -quiet \
-          -archivePath build/Archives/CopilotForXcode.xcarchive \
           -configuration Release \
+          -destination 'generic/platform=macOS' \
+          -derivedDataPath build/DerivedData \
           -skipMacroValidation \
           -disableAutomaticPackageResolution \
-          -workspace 'Copilot for Xcode.xcworkspace' \
-          archive \
-          CODE_SIGNING_ALLOWED="NO"
+          CODE_SIGNING_ALLOWED=NO \
+          build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
