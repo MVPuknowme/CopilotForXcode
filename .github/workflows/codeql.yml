@@ -69,6 +69,9 @@ jobs:
           -skipMacroValidation \
           -disableAutomaticPackageResolution \
           CODE_SIGNING_ALLOWED=NO \
+          HOST_APP_NAME='GitHub Copilot for Xcode' \
+          EXTENSION_SERVICE_NAME='GitHub Copilot for Xcode Extension' \
+          BUNDLE_IDENTIFIER_BASE='com.github.CopilotForXcode' \
           build
 
     - name: Perform CodeQL Analysis
